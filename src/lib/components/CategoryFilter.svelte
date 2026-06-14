@@ -1,0 +1,242 @@
+<script lang="ts">
+  import Badge from './Badge.svelte';
+  import { createPicklistValue, deletePicklistValue, updatePicklistValue } from '../store';
+  import type { PicklistValue } from '../types';
+  import { createEventDispatcher } from 'svelte';
+  import { CAT_COLORS } from '../types';
+
+  const dispatch = createEventDispatcher();
+
+  $: color = CAT_COLORS[catType]?.hex ?? '#888';
+
+  export let catType: string;
+  export let label: string;
+  export let values: PicklistValue[];
+  export let selected: number[];
+  export let layout: 'vertical' | 'horizontal';
+
+  let editingLabel = false;
+  let labelDraft = label;
+  let newValueInput = '';
+  let showNewInput = false;
+
+  function toggleValue(id: number) {
+    if (selected.includes(id)) {
+      selected = selected.filter(x => x !== id);
+    } else {
+      selected = [...selected, id];
+    }
+  }
+
+  let lastError = '';
+
+  async function removeValue(id: number) {
+    try {
+      await deletePicklistValue(id);
+      selected = selected.filter(x => x !== id);
+      lastError = '';
+    } catch (e: any) {
+      lastError = String(e);
+    }
+  }
+
+  let editingId: number | null = null;
+  let editDraft = '';
+
+  function startEdit(val: PicklistValue) {
+    editingId = val.id;
+    editDraft = val.label;
+  }
+
+  async function commitEdit(id: number) {
+    const trimmed = editDraft.trim();
+    editingId = null;
+    if (!trimmed) return;
+    try {
+      await updatePicklistValue(id, trimmed);
+      lastError = '';
+    } catch (e: any) {
+      lastError = String(e);
+    }
+  }
+
+  function cancelEdit() { editingId = null; }
+
+  async function addValue() {
+    const trimmed = newValueInput.trim();
+    const type = catType;
+    newValueInput = '';
+    showNewInput = false;
+    if (!trimmed) return;
+    try {
+      await createPicklistValue(type, trimmed);
+      lastError = '';
+    } catch (e) {
+      lastError = `Error [${type}]: ${e}`;
+    }
+  }
+
+  function commitLabel() {
+    editingLabel = false;
+    label = labelDraft;
+    dispatch('labelChange');
+  }
+</script>
+
+<div class="cat-filter" class:horizontal={layout === 'horizontal'} class:vertical={layout === 'vertical'}>
+  <div class="cat-header">
+    {#if editingLabel}
+      <input
+        class="label-input"
+        bind:value={labelDraft}
+        on:blur={commitLabel}
+        on:keydown={e => e.key === 'Enter' && commitLabel()}
+        autofocus
+      />
+    {:else}
+      <!-- svelte-ignore a11y-click-events-have-key-events -->
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <span class="cat-label" style="color: {color};" on:click={() => { editingLabel = true; labelDraft = label; }}>{label}</span>
+    {/if}
+  </div>
+
+  {#if lastError}
+    <span class="err">{lastError}</span>
+  {/if}
+
+  <div class="badges" class:wrap={layout === 'horizontal'}>
+    {#each values as val (val.id)}
+      <div class="badge-row">
+        {#if editingId === val.id}
+          <input
+            class="edit-val-input"
+            bind:value={editDraft}
+            on:blur={() => commitEdit(val.id)}
+            on:keydown={e => { if (e.key === 'Enter') commitEdit(val.id); if (e.key === 'Escape') cancelEdit(); }}
+            autofocus
+          />
+        {:else}
+          <Badge
+            label={val.label}
+            catType={catType}
+            selected={selected.includes(val.id)}
+            on:click={() => toggleValue(val.id)}
+          />
+          <button class="action-btn" on:click={() => startEdit(val)} title="Edit value">✎</button>
+          <button class="action-btn del" on:click={() => removeValue(val.id)} title="Delete value">×</button>
+        {/if}
+      </div>
+    {/each}
+
+    {#if showNewInput}
+      <input
+        class="new-val-input"
+        bind:value={newValueInput}
+        placeholder="New value…"
+        on:blur={() => { showNewInput = false; }}
+        on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addValue(); } if (e.key === 'Escape') { newValueInput = ''; showNewInput = false; } }}
+        autofocus
+      />
+    {:else}
+      <button class="add-btn" on:click={() => showNewInput = true}>+ Add</button>
+    {/if}
+  </div>
+</div>
+
+<style>
+  .cat-filter { display: flex; gap: 6px; }
+  .cat-filter.vertical { flex-direction: column; }
+  .cat-filter.horizontal { flex-direction: column; }
+
+  .cat-header { margin-bottom: 2px; }
+
+  .cat-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    user-select: none;
+    opacity: 0.85;
+    transition: opacity 0.15s;
+  }
+  .cat-label:hover { opacity: 1; }
+
+  .label-input {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    outline: 1px solid var(--accent);
+    border-radius: 3px;
+    padding: 0 3px;
+    width: 90px;
+  }
+
+  .badges {
+    display: flex;
+    gap: 6px;
+    flex-direction: column;
+  }
+  .badges.wrap {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .badge-row {
+    display: flex; align-items: center; gap: 3px;
+  }
+
+  .action-btn {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 13px; line-height: 1;
+    padding: 0 2px; opacity: 0; transition: opacity 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+  .badge-row:hover .action-btn { opacity: 1; }
+  .action-btn:hover { color: var(--text); }
+  .action-btn.del:hover { color: #ef4444; }
+
+  .edit-val-input {
+    font-size: 11px;
+    border: 1.5px solid var(--accent);
+    border-radius: 999px;
+    padding: 2px 10px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    width: 100px;
+    font-family: inherit;
+  }
+
+  .add-btn {
+    font-size: 11px;
+    color: var(--text-muted);
+    background: none;
+    border: 1.5px dashed var(--border);
+    border-radius: 999px;
+    padding: 2px 10px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    font-family: inherit;
+  }
+  .add-btn:hover { color: var(--text); border-color: var(--text-muted); }
+
+  .err { font-size: 10px; color: #ef4444; word-break: break-all; }
+
+  .new-val-input {
+    font-size: 11px;
+    border: 1.5px solid var(--accent);
+    border-radius: 999px;
+    padding: 2px 10px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    width: 100px;
+    font-family: inherit;
+  }
+</style>
