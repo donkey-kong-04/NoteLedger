@@ -75,7 +75,7 @@
       {/each}
 
       {#each subProjects as sub (sub.id)}
-        {#if showAllSubProjects || subHasAnyLogs(sub.id)}
+        {#if showAllSubProjects || !filtersActive || subHasAnyLogs(sub.id)}
           <svelte:self
             project={sub}
             subProjects={allProjects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(sub.id))}
