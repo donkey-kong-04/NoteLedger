@@ -17,6 +17,10 @@ export interface Project {
   title: string;
   description: string;
   parent_id: number | null;
+  category1_ids: number[];
+  category2_ids: number[];
+  category3_ids: number[];
+  category4_ids: number[];
 }
 
 export interface Log {
@@ -33,6 +37,22 @@ export interface Log {
   category2_ids: number[];
   category3_ids: number[];
   category4_ids: number[];
+}
+
+import { openUrl } from '@tauri-apps/plugin-opener';
+
+export async function openLink(url: string) {
+  await openUrl(url);
+}
+
+export function handleLinkClick(e: MouseEvent) {
+  const target = (e.target as HTMLElement).closest('a');
+  if (!target) return;
+  const href = target.getAttribute('href');
+  if (!href) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openLink(href);
 }
 
 export const CAT_COLORS: Record<string, { hex: string; rgb: string }> = {

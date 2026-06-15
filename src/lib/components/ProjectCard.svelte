@@ -1,5 +1,6 @@
 <script lang="ts">
   import LogCard from './LogCard.svelte';
+  import Badge from './Badge.svelte';
   import { createEventDispatcher } from 'svelte';
   import type { Log, Project, PicklistValue } from '../types';
 
@@ -9,11 +10,19 @@
   export let allLogsTotal: Log[] = [];
   export let allProjects: Project[];
   export let filtersActive: boolean = false;
+  export let showAllSubProjects: boolean = false;
   export let logTypes: PicklistValue[];
   export let cat1Vals: PicklistValue[];
   export let cat2Vals: PicklistValue[];
   export let cat3Vals: PicklistValue[];
   export let cat4Vals: PicklistValue[];
+
+  $: catBadges = [
+    ...(project.category1_ids ?? []).map(id => ({ val: cat1Vals.find(v => v.id === id), type: 'category_1' })),
+    ...(project.category2_ids ?? []).map(id => ({ val: cat2Vals.find(v => v.id === id), type: 'category_2' })),
+    ...(project.category3_ids ?? []).map(id => ({ val: cat3Vals.find(v => v.id === id), type: 'category_3' })),
+    ...(project.category4_ids ?? []).map(id => ({ val: cat4Vals.find(v => v.id === id), type: 'category_4' })),
+  ].filter(x => x.val) as { val: PicklistValue; type: string }[];
 
   const dispatch = createEventDispatcher();
   let collapsed = false;
@@ -41,11 +50,20 @@
           stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </button>
-    <span class="project-title"
-      role="button" tabindex="0"
-      on:click={() => dispatch('editProject', project)}
-      on:keydown={e => e.key === 'Enter' && dispatch('editProject', project)}
-    >{project.title}</span>
+    <div class="project-title-group">
+      <span class="project-title"
+        role="button" tabindex="0"
+        on:click={() => dispatch('editProject', project)}
+        on:keydown={e => e.key === 'Enter' && dispatch('editProject', project)}
+      >{project.title}</span>
+      {#if catBadges.length > 0}
+        <div class="project-cat-badges">
+          {#each catBadges as { val, type }}
+            <Badge label={val.label} catType={type} selected={true} clickable={false} size="sm" />
+          {/each}
+        </div>
+      {/if}
+    </div>
     <span class="log-count">{countLabel}</span>
     <button class="add-log-btn" on:click={() => dispatch('newLogInProject', project)} title="Add log to project">+</button>
   </div>
@@ -57,13 +75,13 @@
       {/each}
 
       {#each subProjects as sub (sub.id)}
-        {#if !filtersActive || subHasAnyLogs(sub.id)}
+        {#if showAllSubProjects || subHasAnyLogs(sub.id)}
           <svelte:self
             project={sub}
             subProjects={allProjects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(sub.id))}
             {allLogs}
             {allLogsTotal}
-            {allProjects} {filtersActive} {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
+            {allProjects} {filtersActive} {showAllSubProjects} {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
             on:edit
             on:editProject
             on:newLogInProject
@@ -102,11 +120,17 @@
   }
   .collapse-btn:hover { background: var(--surface-3); color: var(--text); }
 
+  .project-title-group {
+    flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0;
+  }
+
   .project-title {
-    flex: 1; font-size: 13px; font-weight: 700;
+    font-size: 13px; font-weight: 700;
     color: var(--text); cursor: pointer; letter-spacing: 0.01em;
   }
   .project-title:hover { color: var(--accent); }
+
+  .project-cat-badges { display: flex; flex-wrap: wrap; gap: 3px; }
 
   .log-count {
     font-size: 11px; color: var(--text-muted);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import Badge from './Badge.svelte';
-  import { deadlineColor, contrastText, CAT_COLORS } from '../types';
+  import { deadlineColor, contrastText, CAT_COLORS, handleLinkClick } from '../types';
   import type { Log, PicklistValue } from '../types';
   import { createEventDispatcher } from 'svelte';
 
@@ -35,13 +35,18 @@
         <span class="closed-pill">Closed</span>
       {/if}
     </div>
-    {#if logType}
-      <span class="log-type">{logType.label}</span>
-    {/if}
+    <div class="type-row">
+      {#if logType}
+        <span class="log-type">{logType.label}</span>
+      {/if}
+      {#if log.due_date}
+        <span class="deadline" style="background:{dlColor}; color:{dlText};">{log.due_date}</span>
+      {/if}
+    </div>
   </div>
 
   {#if descPreview}
-    <div class="desc">{@html descPreview}</div>
+    <div class="desc" on:click|stopPropagation={handleLinkClick}>{@html descPreview}</div>
   {/if}
 
   <div class="card-footer">
@@ -50,11 +55,6 @@
         <Badge label={val.label} catType={type} selected={true} clickable={false} size="sm" />
       {/each}
     </div>
-    {#if log.due_date}
-      <span class="deadline" style="background:{dlColor}; color:{dlText};">
-        {log.due_date}
-      </span>
-    {/if}
   </div>
 </article>
 
@@ -70,6 +70,7 @@
     flex-direction: column;
     gap: 8px;
     min-width: 0;
+    align-self: start;
   }
   .card:hover {
     box-shadow: 0 4px 20px rgba(0,0,0,0.1);
@@ -86,9 +87,11 @@
     font-size: 10px; font-weight: 600; text-transform: uppercase;
     background: var(--border); color: var(--text-muted);
     border-radius: 999px; padding: 1px 7px;
+    flex-shrink: 0;
   }
 
   .log-type { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .type-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 
   .desc {
     font-size: 12px; color: var(--text-muted); line-height: 1.5;
@@ -98,10 +101,18 @@
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+    transition: max-height 0.3s ease;
+  }
+  .card:hover .desc {
+    max-height: 2000px;
+    -webkit-line-clamp: unset;
+    display: block;
   }
   .desc :global(*) { margin: 0; }
+  .desc :global(ul), .desc :global(ol) { padding-left: 18px; margin: 2px 0; }
+  .desc :global(li) { margin: 1px 0; }
 
-  .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .card-footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .badges-row { display: flex; gap: 4px; flex-wrap: wrap; }
 
   .deadline {

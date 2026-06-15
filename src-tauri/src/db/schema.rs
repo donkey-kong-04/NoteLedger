@@ -147,5 +147,31 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ")?;
     }
 
+    if version < 4 {
+        conn.execute_batch("
+            CREATE TABLE IF NOT EXISTS project_category_1 (
+                project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                value_id   INTEGER NOT NULL REFERENCES user_customizable_input(id),
+                PRIMARY KEY (project_id, value_id)
+            );
+            CREATE TABLE IF NOT EXISTS project_category_2 (
+                project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                value_id   INTEGER NOT NULL REFERENCES user_customizable_input(id),
+                PRIMARY KEY (project_id, value_id)
+            );
+            CREATE TABLE IF NOT EXISTS project_category_3 (
+                project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                value_id   INTEGER NOT NULL REFERENCES user_customizable_input(id),
+                PRIMARY KEY (project_id, value_id)
+            );
+            CREATE TABLE IF NOT EXISTS project_category_4 (
+                project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                value_id   INTEGER NOT NULL REFERENCES user_customizable_input(id),
+                PRIMARY KEY (project_id, value_id)
+            );
+            PRAGMA user_version = 4;
+        ")?;
+    }
+
     Ok(())
 }

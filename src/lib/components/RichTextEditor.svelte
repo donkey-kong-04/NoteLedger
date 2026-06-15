@@ -1,10 +1,11 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { handleLinkClick } from '../types';
 
   export let value: string = '';
 
   let editor: HTMLDivElement;
-  let activeFormats = { bold: false, italic: false };
+  let activeFormats = { bold: false, italic: false, ul: false, ol: false };
 
   const FONT_SIZES = [
     { label: 'Small',  px: '12px' },
@@ -64,6 +65,8 @@
     activeFormats = {
       bold: document.queryCommandState('bold'),
       italic: document.queryCommandState('italic'),
+      ul: document.queryCommandState('insertUnorderedList'),
+      ol: document.queryCommandState('insertOrderedList'),
     };
   }
 
@@ -71,6 +74,17 @@
     if (e.key === 'Tab') {
       e.preventDefault();
       document.execCommand('insertText', false, '    ');
+    }
+  }
+
+  function onPaste(e: ClipboardEvent) {
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    const html = e.clipboardData?.getData('text/html') ?? '';
+    if (!html && /^https?:\/\/\S+$/.test(text.trim())) {
+      e.preventDefault();
+      const url = text.trim();
+      document.execCommand('insertHTML', false, `<a href="${url}">${url}</a>`);
+      syncValue();
     }
   }
 </script>
@@ -88,6 +102,36 @@
       on:mousedown|preventDefault={() => exec('italic')}
       title="Italic (⌘I)"
     ><i>I</i></button>
+
+    <button
+      class="tb-btn" class:active={activeFormats.ul}
+      on:mousedown|preventDefault={() => exec('insertUnorderedList')}
+      title="Bullet list"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <circle cx="2" cy="4" r="1" fill="currentColor" stroke="none"/>
+        <line x1="5" y1="4" x2="13" y2="4"/>
+        <circle cx="2" cy="8" r="1" fill="currentColor" stroke="none"/>
+        <line x1="5" y1="8" x2="13" y2="8"/>
+        <circle cx="2" cy="12" r="1" fill="currentColor" stroke="none"/>
+        <line x1="5" y1="12" x2="13" y2="12"/>
+      </svg>
+    </button>
+
+    <button
+      class="tb-btn" class:active={activeFormats.ol}
+      on:mousedown|preventDefault={() => exec('insertOrderedList')}
+      title="Numbered list"
+    >
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <text x="0" y="5" font-size="5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">1.</text>
+        <line x1="5" y1="4" x2="13" y2="4"/>
+        <text x="0" y="9" font-size="5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">2.</text>
+        <line x1="5" y1="8" x2="13" y2="8"/>
+        <text x="0" y="13" font-size="5" font-weight="700" fill="currentColor" stroke="none" font-family="sans-serif">3.</text>
+        <line x1="5" y1="12" x2="13" y2="12"/>
+      </svg>
+    </button>
 
     <div class="tb-divider"></div>
 
@@ -121,6 +165,8 @@
     on:keyup={updateActive}
     on:mouseup={updateActive}
     on:keydown={onKeydown}
+    on:click={handleLinkClick}
+    on:paste={onPaste}
   ></div>
 </div>
 
@@ -208,5 +254,13 @@
     content: attr(placeholder);
     color: var(--text-muted);
     pointer-events: none;
+  }
+  .editor :global(ul),
+  .editor :global(ol) {
+    margin: 4px 0;
+    padding-left: 20px;
+  }
+  .editor :global(li) {
+    margin: 2px 0;
   }
 </style>

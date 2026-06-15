@@ -28,7 +28,7 @@ export async function loadAll() {
 }
 
 export async function createProject(project: Omit<Project, 'id'>) {
-  await invoke<Project>('create_project', { project: { ...project, id: 0 } });
+  await invoke<Project>('create_project', { project: { ...project, id: 0, category1_ids: project.category1_ids ?? [], category2_ids: project.category2_ids ?? [], category3_ids: project.category3_ids ?? [], category4_ids: project.category4_ids ?? [] } });
   const fresh = await invoke<Project[]>('get_projects');
   projects.set(fresh);
 }

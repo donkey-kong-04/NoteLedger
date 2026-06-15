@@ -122,8 +122,10 @@
             selected={selected.includes(val.id)}
             on:click={() => toggleValue(val.id)}
           />
-          <button class="action-btn" on:click={() => startEdit(val)} title="Edit value">✎</button>
-          <button class="action-btn del" on:click={() => removeValue(val.id)} title="Delete value">×</button>
+          {#if selected.includes(val.id)}
+            <button class="action-btn" on:click={() => startEdit(val)} title="Edit value">✎</button>
+            <button class="action-btn del" on:click={() => removeValue(val.id)} title="Delete value">×</button>
+          {/if}
         {/if}
       </div>
     {/each}
@@ -179,9 +181,6 @@
   .badges {
     display: flex;
     gap: 6px;
-    flex-direction: column;
-  }
-  .badges.wrap {
     flex-direction: row;
     flex-wrap: wrap;
     align-items: center;
@@ -192,12 +191,11 @@
   }
 
   .action-btn {
+    display: inline-flex; align-items: center;
     background: none; border: none; cursor: pointer;
     color: var(--text-muted); font-size: 13px; line-height: 1;
-    padding: 0 2px; opacity: 0; transition: opacity 0.15s, color 0.15s;
-    flex-shrink: 0;
+    padding: 0 2px; flex-shrink: 0;
   }
-  .badge-row:hover .action-btn { opacity: 1; }
   .action-btn:hover { color: var(--text); }
   .action-btn.del:hover { color: #ef4444; }
 

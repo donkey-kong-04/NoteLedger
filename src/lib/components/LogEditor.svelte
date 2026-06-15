@@ -4,7 +4,7 @@
   import RichTextEditor from './RichTextEditor.svelte';
   import type { Log, PicklistValue, Project } from '../types';
   import { CAT_COLORS } from '../types';
-  import { createLog, updateLog, deleteLog } from '../store';
+  import { createLog, updateLog, deleteLog, createPicklistValue, picklists } from '../store';
 
   export let log: Log | null = null;
   export let logTypes: PicklistValue[];
@@ -54,6 +54,7 @@
 
   async function save() {
     if (!draft.title.trim()) return;
+    await pendingAdd;
     draft.due_date = dueDateStr || null;
 if (isNew) {
       await createLog(draft);
@@ -71,12 +72,34 @@ if (isNew) {
 
   function close() { dispatch('close'); }
 
-  const cats: { slot: 1|2|3|4; label: () => string; vals: () => PicklistValue[] }[] = [
-    { slot: 1, label: () => cat1Label, vals: () => cat1Vals },
-    { slot: 2, label: () => cat2Label, vals: () => cat2Vals },
-    { slot: 3, label: () => cat3Label, vals: () => cat3Vals },
-    { slot: 4, label: () => cat4Label, vals: () => cat4Vals },
+  const byLabel = (a: PicklistValue, b: PicklistValue) => a.label.localeCompare(b.label);
+  $: liveCat1 = $picklists.filter(v => v.picklist_type === 'category_1').sort(byLabel);
+  $: liveCat2 = $picklists.filter(v => v.picklist_type === 'category_2').sort(byLabel);
+  $: liveCat3 = $picklists.filter(v => v.picklist_type === 'category_3').sort(byLabel);
+  $: liveCat4 = $picklists.filter(v => v.picklist_type === 'category_4').sort(byLabel);
+
+  $: cats = [
+    { slot: 1 as const, label: cat1Label, vals: liveCat1 },
+    { slot: 2 as const, label: cat2Label, vals: liveCat2 },
+    { slot: 3 as const, label: cat3Label, vals: liveCat3 },
+    { slot: 4 as const, label: cat4Label, vals: liveCat4 },
   ];
+
+  let showAddInput: Record<number, boolean> = { 1: false, 2: false, 3: false, 4: false };
+  let addDraft: Record<number, string> = { 1: '', 2: '', 3: '', 4: '' };
+  let pendingAdd: Promise<void> = Promise.resolve();
+
+  async function addAndSelect(slot: 1|2|3|4) {
+    const trimmed = addDraft[slot].trim();
+    if (!trimmed) { showAddInput[slot] = false; return; }
+    addDraft[slot] = '';
+    showAddInput[slot] = false;
+    const p = createPicklistValue(`category_${slot}`, trimmed).then(newVal => {
+      toggleCat(slot, newVal.id);
+    });
+    pendingAdd = p;
+    await p;
+  }
 </script>
 
 <div class="backdrop" on:click={close} on:keydown={e => e.key === 'Escape' && close()} role="presentation"></div>
@@ -144,9 +167,9 @@ if (isNew) {
         {@const sel = draft[`category${cat.slot}_ids`]}
         {@const color = CAT_COLORS[`category_${cat.slot}`]?.hex ?? '#888'}
         <div class="cat-field">
-          <div class="cat-field-label" style="color:{color}">{cat.label()}</div>
+          <div class="cat-field-label" style="color:{color}">{cat.label}</div>
           <div class="cat-badges">
-            {#each cat.vals() as v (v.id)}
+            {#each cat.vals as v (v.id)}
               <Badge
                 label={v.label}
                 catType="category_{cat.slot}"
@@ -155,7 +178,20 @@ if (isNew) {
                 size="sm"
               />
             {/each}
-            {#if cat.vals().length === 0}
+            {#if showAddInput[cat.slot]}
+              <input
+                class="inline-add-input"
+                style="border-color:{color}; outline-color:{color}"
+                bind:value={addDraft[cat.slot]}
+                placeholder="New value…"
+                on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addAndSelect(cat.slot); } if (e.key === 'Escape' || e.key === 'Tab') { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; } }}
+                on:blur={() => { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; }}
+                autofocus
+              />
+            {:else}
+              <button class="inline-add-btn" style="--cat-color:{color}" on:click={() => showAddInput[cat.slot] = true}>+ Add</button>
+            {/if}
+            {#if cat.vals.length === 0 && !showAddInput[cat.slot]}
               <span class="no-vals">No values</span>
             {/if}
           </div>
@@ -295,6 +331,24 @@ if (isNew) {
   .no-vals {
     font-size: 11px; color: var(--text-muted);
     font-style: italic; align-self: center;
+  }
+
+  .inline-add-btn {
+    --cat-color: var(--text-muted);
+    font-size: 11px; color: var(--cat-color);
+    background: none; border: 1.5px dashed var(--cat-color);
+    border-radius: 999px; padding: 2px 8px;
+    cursor: pointer; font-family: inherit;
+    transition: opacity 0.15s;
+    align-self: center;
+  }
+  .inline-add-btn:hover { opacity: 0.7; }
+
+  .inline-add-input {
+    font-size: 11px; border: 1.5px solid var(--accent);
+    border-radius: 999px; padding: 2px 8px;
+    background: var(--surface); color: var(--text);
+    outline: none; width: 90px; font-family: inherit;
   }
 
   .panel-footer {

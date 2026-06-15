@@ -22,6 +22,7 @@
   let selCat2: number[] = [];
   let selCat3: number[] = [];
   let selCat4: number[] = [];
+  let selProject: number | null = null;
 
   let cat1Label = '';
   let cat2Label = '';
@@ -62,18 +63,73 @@
   $: cat3Vals = $picklists.filter(v => v.picklist_type === 'category_3').sort(byLabel);
   $: cat4Vals = $picklists.filter(v => v.picklist_type === 'category_4').sort(byLabel);
 
+  $: filtersActive = selCat1.length > 0 || selCat2.length > 0 || selCat3.length > 0 || selCat4.length > 0 || selProject !== null;
+  $: catOrCloseFilterActive = selCat1.length > 0 || selCat2.length > 0 || selCat3.length > 0 || selCat4.length > 0 || showClosed;
+  $: anyFilterActive = filtersActive || showClosed;
+
+  function clearAllFilters() {
+    selCat1 = []; selCat2 = []; selCat3 = []; selCat4 = [];
+    selProject = null;
+    showClosed = false;
+  }
+
+  function getSubtreeIds(projectId: number): Set<number> {
+    const ids = new Set<number>([projectId]);
+    $projects.filter(p => p.parent_id !== null && Number(p.parent_id) === projectId)
+      .forEach(child => getSubtreeIds(child.id).forEach(id => ids.add(id)));
+    return ids;
+  }
+
+  function getRootAncestorId(projectId: number): number {
+    const p = $projects.find(p => p.id === projectId);
+    if (!p || p.parent_id == null) return projectId;
+    return getRootAncestorId(Number(p.parent_id));
+  }
+
+  $: subtreeIds = selProject !== null ? getSubtreeIds(selProject) : null;
+
+  function ancestorCatIds(projectId: number, slot: 1|2|3|4): number[] {
+    const p = $projects.find(p => p.id === projectId);
+    if (!p) return [];
+    const own = p[`category${slot}_ids`] as number[];
+    if (p.parent_id != null) return [...own, ...ancestorCatIds(Number(p.parent_id), slot)];
+    return own;
+  }
+
+  function logPassesCat(l: import('$lib/types').Log, slot: 1|2|3|4, sel: number[]): boolean {
+    if (!sel.length) return true;
+    const logIds = l[`category${slot}_ids`];
+    const projIds = l.project_id != null ? ancestorCatIds(Number(l.project_id), slot) : [];
+    return sel.every(id => logIds.includes(id) || projIds.includes(id));
+  }
+
   $: filtered = $logs.filter(l => {
     if (!showClosed && l.is_closed) return false;
-    if (selCat1.length && !selCat1.every(id => l.category1_ids.includes(id))) return false;
-    if (selCat2.length && !selCat2.every(id => l.category2_ids.includes(id))) return false;
-    if (selCat3.length && !selCat3.every(id => l.category3_ids.includes(id))) return false;
-    if (selCat4.length && !selCat4.every(id => l.category4_ids.includes(id))) return false;
+    if (!logPassesCat(l, 1, selCat1)) return false;
+    if (!logPassesCat(l, 2, selCat2)) return false;
+    if (!logPassesCat(l, 3, selCat3)) return false;
+    if (!logPassesCat(l, 4, selCat4)) return false;
+    if (subtreeIds !== null && (l.project_id == null || !subtreeIds.has(Number(l.project_id)))) return false;
     return true;
   });
 
-  $: filtersActive = selCat1.length > 0 || selCat2.length > 0 || selCat3.length > 0 || selCat4.length > 0;
   $: topLevelProjects = $projects.filter(p => p.parent_id == null);
-  $: unassignedLogs = filtered.filter(l => l.project_id == null);
+  $: visibleTopLevelProjects = selProject !== null
+    ? topLevelProjects.filter(p => p.id === getRootAncestorId(selProject!))
+    : topLevelProjects;
+  $: unassignedLogs = selProject !== null ? [] : filtered.filter(l => l.project_id == null);
+
+  // Build flat project list for dropdown (indented to show hierarchy)
+  function buildProjectOptions(projects: Project[], parentId: number | null = null, depth = 0): {id: number, label: string}[] {
+    return projects
+      .filter(p => (p.parent_id == null) === (parentId == null) && (parentId == null || Number(p.parent_id) === parentId))
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .flatMap(p => [
+        { id: p.id, label: '  '.repeat(depth) + p.title },
+        ...buildProjectOptions(projects, p.id, depth + 1)
+      ]);
+  }
+  $: projectOptions = buildProjectOptions($projects);
 
   function projectHasAnyLogs(projectId: number): boolean {
     if (filtered.some(l => Number(l.project_id) === Number(projectId))) return true;
@@ -119,19 +175,19 @@
   <header class="menu-bar">
     <svg width="36" height="40" viewBox="0 0 36 40" aria-label="Note Ledger">
       <rect x="0" y="1" width="6" height="38" rx="1.5" fill="#4f46e5"/>
-      <rect x="6" y="1" width="28" height="38" rx="1.5" fill="#6366f1"/>
-      <rect x="33" y="3" width="3" height="34" rx="0.5" fill="#e0e7ff"/>
-      <line x1="33" y1="9"  x2="36" y2="9"  stroke="#c7d2fe" stroke-width="0.5"/>
-      <line x1="33" y1="15" x2="36" y2="15" stroke="#c7d2fe" stroke-width="0.5"/>
-      <line x1="33" y1="21" x2="36" y2="21" stroke="#c7d2fe" stroke-width="0.5"/>
-      <line x1="33" y1="27" x2="36" y2="27" stroke="#c7d2fe" stroke-width="0.5"/>
-      <line x1="33" y1="33" x2="36" y2="33" stroke="#c7d2fe" stroke-width="0.5"/>
-      <g transform="translate(20,20) rotate(-32)">
-        <text x="0" y="3" text-anchor="middle"
-          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-          font-size="7" font-weight="700" fill="#fff" opacity="0.92" letter-spacing="0.4">ledger</text>
-        <line x1="-9" y1="-4" x2="9" y2="-4" stroke="#fff" stroke-width="0.6" opacity="0.35"/>
-      </g>
+      <rect x="6" y="1" width="27" height="38" rx="1.5" fill="#6366f1"/>
+      <rect x="32" y="3" width="4" height="34" rx="0.5" fill="#e0e7ff"/>
+      <line x1="32" y1="9"  x2="36" y2="9"  stroke="#a5b4fc" stroke-width="0.6"/>
+      <line x1="32" y1="15" x2="36" y2="15" stroke="#a5b4fc" stroke-width="0.6"/>
+      <line x1="32" y1="21" x2="36" y2="21" stroke="#a5b4fc" stroke-width="0.6"/>
+      <line x1="32" y1="27" x2="36" y2="27" stroke="#a5b4fc" stroke-width="0.6"/>
+      <line x1="32" y1="33" x2="36" y2="33" stroke="#a5b4fc" stroke-width="0.6"/>
+      <text
+        x="19" y="20"
+        text-anchor="middle" dominant-baseline="middle"
+        transform="rotate(-90, 19, 20)"
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+        font-size="6.5" font-weight="800" fill="#fff" opacity="0.95" letter-spacing="0.3">NLedger</text>
     </svg>
     <label class="toggle-wrap" title="Show closed logs">
       <span class="toggle-switch" class:on={showClosed} on:click={() => showClosed = !showClosed} role="switch" aria-checked={showClosed} tabindex="0" on:keydown={e => e.key === ' ' && (showClosed = !showClosed)}>
@@ -140,6 +196,17 @@
       <span class="toggle-label">Show closed</span>
     </label>
     <nav class="menu-nav">
+      {#if $projects.length > 0}
+        <select class="project-filter" value={selProject === null ? '' : String(selProject)} on:change={e => { const v = (e.target as HTMLSelectElement).value; selProject = v === '' ? null : Number(v); }}>
+          <option value="">All projects</option>
+          {#each projectOptions as opt}
+            <option value={String(opt.id)}>{opt.label}</option>
+          {/each}
+        </select>
+      {/if}
+      {#if anyFilterActive}
+        <button class="btn-clear-filters" on:click={clearAllFilters}>✕ Clear filters</button>
+      {/if}
       <button class="btn-secondary-sm" on:click={openNewProject}>+ New Project</button>
       {#if logTypes.length > 0}
         {#each logTypes as lt}
@@ -154,8 +221,6 @@
   </header>
 
   <div class="layout">
-    <div class="corner"></div>
-
     <div class="top-cats">
       <div class="top-cat-col">
         <CategoryFilter catType="category_3" bind:label={cat3Label} values={cat3Vals} bind:selected={selCat3} layout="horizontal" on:labelChange={persistLabelChange} />
@@ -178,15 +243,16 @@
 
     <main class="main">
       <div class="cards">
-        {#each topLevelProjects as project (project.id)}
-          {#if !filtersActive || projectHasAnyLogs(project.id)}
+        {#each visibleTopLevelProjects as project (project.id)}
+          {#if selProject !== null || !anyFilterActive || projectHasAnyLogs(project.id)}
             <ProjectCard
               {project}
               subProjects={$projects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(project.id))}
               allLogs={filtered}
               allLogsTotal={$logs}
               allProjects={$projects}
-              {filtersActive}
+              filtersActive={anyFilterActive}
+              showAllSubProjects={selProject !== null && !catOrCloseFilterActive}
               {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
               on:edit={openEdit}
               on:editProject={openEditProject}
@@ -224,6 +290,8 @@
     <ProjectEditor
       project={editorProject}
       allProjects={$projects}
+      {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
+      {cat1Label} {cat2Label} {cat3Label} {cat4Label}
       on:close={closeProjectEditor}
     />
   {/if}
@@ -283,19 +351,13 @@
 
   .layout {
     display: grid;
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 230px 1fr;
     grid-template-rows: auto 1fr;
     flex: 1; overflow: hidden; min-height: 0;
   }
 
-  .corner {
-    grid-column: 1; grid-row: 1;
-    background: var(--surface);
-    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  }
-
   .sidebar {
-    grid-column: 1; grid-row: 2;
+    grid-column: 1; grid-row: 1 / 3;
     background: var(--surface); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; overflow: hidden; min-height: 0;
   }
@@ -344,6 +406,22 @@
     transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   }
   .toggle-switch.on .toggle-thumb { left: 18px; }
+
+  .btn-clear-filters {
+    background: none; color: #ef4444;
+    border: 1px solid #ef4444; border-radius: 8px;
+    padding: 6px 12px; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit; transition: background 0.15s;
+  }
+  .btn-clear-filters:hover { background: rgba(239,68,68,0.1); }
+
+  .project-filter {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px; font-size: 13px; font-family: inherit;
+    cursor: pointer; outline: none; max-width: 160px;
+  }
+  .project-filter:focus { border-color: var(--accent); }
 
   .btn-secondary-sm {
     background: none; color: var(--text-muted);
