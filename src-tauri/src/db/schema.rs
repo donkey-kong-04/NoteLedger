@@ -173,5 +173,12 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ")?;
     }
 
+    if version < 5 {
+        conn.execute_batch("
+            ALTER TABLE user_settings ADD COLUMN density TEXT NOT NULL DEFAULT 'normal';
+            PRAGMA user_version = 5;
+        ")?;
+    }
+
     Ok(())
 }

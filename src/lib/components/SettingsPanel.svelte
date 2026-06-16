@@ -3,7 +3,7 @@
   import { get } from 'svelte/store';
   import { settings, picklists, projects, saveSettings, createPicklistValue, updatePicklistValue, deletePicklistValue, createProject, updateProject, deleteProject } from '../store';
   import { CAT_COLORS } from '../types';
-  import type { PicklistValue, Project } from '../types';
+  import type { PicklistValue, Project, Density } from '../types';
 
   const dispatch = createEventDispatcher();
 
@@ -13,6 +13,21 @@
   let cat3Label = $settings.category3_label;
   let cat4Label = $settings.category4_label;
   let darkMode  = $settings.dark_mode;
+  let density: Density = $settings.density;
+
+  const DENSITY_OPTIONS: { value: Density; label: string }[] = [
+    { value: 'compact', label: 'Compact' },
+    { value: 'normal', label: 'Normal' },
+    { value: 'comfortable', label: 'Comfortable' },
+  ];
+
+  const SECTIONS = [
+    { id: 'appearance', label: 'Appearance' },
+    { id: 'categories', label: 'Category Labels' },
+    { id: 'logtypes', label: 'Log Types' },
+    { id: 'projects', label: 'Projects' },
+  ] as const;
+  let activeSection: typeof SECTIONS[number]['id'] = 'appearance';
 
   $: logTypes = $picklists.filter(v => v.picklist_type === 'log_type');
 
@@ -30,6 +45,7 @@
       category3_label: cat3Label,
       category4_label: cat4Label,
       dark_mode: darkMode,
+      density,
     });
   }
 
@@ -121,170 +137,210 @@
 
 <div class="backdrop" on:click={close} on:keydown={e => e.key === 'Escape' && close()} role="presentation"></div>
 
-<div class="panel" role="dialog" aria-modal="true">
-  <div class="panel-header">
+<div class="modal" role="dialog" aria-modal="true">
+  <div class="modal-header">
     <h2>Settings</h2>
     <button class="icon-btn" on:click={close} aria-label="Close">✕</button>
   </div>
 
-  <div class="panel-body">
+  <div class="modal-body">
+    <nav class="settings-nav">
+      {#each SECTIONS as s}
+        <button
+          class="nav-item"
+          class:active={activeSection === s.id}
+          on:click={() => activeSection = s.id}
+        >{s.label}</button>
+      {/each}
+    </nav>
 
-    <!-- Appearance -->
-    <section>
-      <div class="section-title">Appearance</div>
-      <label class="toggle-row">
-        <div class="toggle-track" class:on={darkMode} on:click={() => { darkMode = !darkMode; persistSettings(); }} on:keydown role="switch" aria-checked={darkMode} tabindex="0">
-          <div class="toggle-thumb"></div>
-        </div>
-        <span>Dark mode</span>
-      </label>
-    </section>
+    <div class="settings-content">
 
-    <!-- Category Labels -->
-    <section>
-      <div class="section-title">Category Labels</div>
-      <div class="label-grid">
-        {#each [
-          { key: 'category_1', bind: () => cat1Label, set: (v) => { cat1Label = v; } },
-          { key: 'category_2', bind: () => cat2Label, set: (v) => { cat2Label = v; } },
-          { key: 'category_3', bind: () => cat3Label, set: (v) => { cat3Label = v; } },
-          { key: 'category_4', bind: () => cat4Label, set: (v) => { cat4Label = v; } },
-        ] as cat, i}
-          <div class="label-row">
-            <span class="cat-dot" style="background: {CAT_COLORS[cat.key]?.hex}"></span>
-            <input
-              value={[cat1Label, cat2Label, cat3Label, cat4Label][i]}
-              on:input={e => { cat.set((e.target as HTMLInputElement).value); }}
-              on:blur={persistSettings}
-              on:keydown={e => e.key === 'Enter' && persistSettings()}
-            />
+      {#if activeSection === 'appearance'}
+        <div class="content-section">
+          <h3 class="content-title">Appearance</h3>
+          <p class="content-hint">Visual preferences for the whole application.</p>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">Dark mode</span>
+              <span class="setting-desc">Switch between light and dark color schemes.</span>
+            </div>
+            <div class="toggle-track" class:on={darkMode} on:click={() => { darkMode = !darkMode; persistSettings(); }} on:keydown role="switch" aria-checked={darkMode} tabindex="0">
+              <div class="toggle-thumb"></div>
+            </div>
           </div>
-        {/each}
-      </div>
-    </section>
 
-    <!-- Log Types -->
-    <section>
-      <div class="section-title">Log Types</div>
-      {#if deleteError}
-        <p class="delete-error">{deleteError}</p>
+          <div class="setting-row">
+            <div class="setting-info">
+              <span class="setting-label">Layout density</span>
+              <span class="setting-desc">Controls padding and spacing across the app, settings, and log/project editors.</span>
+            </div>
+            <select class="density-select" bind:value={density} on:change={persistSettings}>
+              {#each DENSITY_OPTIONS as opt}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+        </div>
       {/if}
-      <div class="log-types-list">
-        {#each logTypes as lt (lt.id)}
-          <div class="log-type-row">
-            {#if editingId === lt.id}
+
+      {#if activeSection === 'categories'}
+        <div class="content-section">
+          <h3 class="content-title">Category Labels</h3>
+          <p class="content-hint">Rename the 4 customizable category slots used on logs and projects.</p>
+
+          <div class="label-grid">
+            {#each [
+              { key: 'category_1', bind: () => cat1Label, set: (v) => { cat1Label = v; } },
+              { key: 'category_2', bind: () => cat2Label, set: (v) => { cat2Label = v; } },
+              { key: 'category_3', bind: () => cat3Label, set: (v) => { cat3Label = v; } },
+              { key: 'category_4', bind: () => cat4Label, set: (v) => { cat4Label = v; } },
+            ] as cat, i}
+              <div class="label-row">
+                <span class="cat-dot" style="background: {CAT_COLORS[cat.key]?.hex}"></span>
+                <input
+                  value={[cat1Label, cat2Label, cat3Label, cat4Label][i]}
+                  on:input={e => { cat.set((e.target as HTMLInputElement).value); }}
+                  on:blur={persistSettings}
+                  on:keydown={e => e.key === 'Enter' && persistSettings()}
+                />
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      {#if activeSection === 'logtypes'}
+        <div class="content-section">
+          <h3 class="content-title">Log Types</h3>
+          <p class="content-hint">Define the types of logs you can create (e.g. Task, Decision, Event). Deleting a type is blocked while logs use it.</p>
+
+          {#if deleteError}
+            <p class="delete-error">{deleteError}</p>
+          {/if}
+          <div class="item-list">
+            {#each logTypes as lt (lt.id)}
+              <div class="item-row">
+                {#if editingId === lt.id}
+                  <input
+                    class="inline-input"
+                    bind:value={editingLabel}
+                    on:blur={commitEdit}
+                    on:keydown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') editingId = null; }}
+                    autofocus
+                  />
+                {:else}
+                  <span class="item-label" on:click={() => startEdit(lt)} on:keydown role="button" tabindex="0">{lt.label}</span>
+                  <button class="del-btn" on:click={() => removeLogType(lt.id)} title="Delete">✕</button>
+                {/if}
+              </div>
+            {/each}
+
+            {#if showNewLogType}
               <input
                 class="inline-input"
-                bind:value={editingLabel}
-                on:blur={commitEdit}
-                on:keydown={e => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') editingId = null; }}
+                bind:value={newLogTypeInput}
+                placeholder="New log type…"
+                on:blur={() => { showNewLogType = false; newLogTypeInput = ''; }}
+                on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addLogType(); } if (e.key === 'Escape') { showNewLogType = false; newLogTypeInput = ''; } }}
                 autofocus
               />
             {:else}
-              <span class="log-type-label" on:click={() => startEdit(lt)} on:keydown role="button" tabindex="0">{lt.label}</span>
-              <button class="del-btn" on:click={() => removeLogType(lt.id)} title="Delete">✕</button>
+              <button class="add-btn" on:click={() => showNewLogType = true}>+ Add log type</button>
             {/if}
           </div>
-        {/each}
-
-        {#if showNewLogType}
-          <input
-            class="inline-input"
-            bind:value={newLogTypeInput}
-            placeholder="New log type…"
-            on:blur={() => { showNewLogType = false; newLogTypeInput = ''; }}
-            on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addLogType(); } if (e.key === 'Escape') { showNewLogType = false; newLogTypeInput = ''; } }}
-            autofocus
-          />
-        {:else}
-          <button class="add-btn" on:click={() => showNewLogType = true}>+ Add log type</button>
-        {/if}
-      </div>
-    </section>
-
-    <!-- Projects -->
-    <section>
-      <div class="section-title">Projects</div>
-      {#if projectError}
-        <p class="delete-error">{projectError}</p>
+        </div>
       {/if}
-      <div class="log-types-list">
-        {#each $projects as p (p.id)}
-          <div class="log-type-row">
-            {#if editingProjectId === p.id}
-              <div class="project-edit">
-                <input
-                  class="inline-input"
-                  bind:value={editingProjectTitle}
-                  placeholder="Project name"
-                  on:keydown={e => { if (e.key === 'Enter') commitEditProject(); if (e.key === 'Escape') editingProjectId = null; }}
-                />
-                <select class="parent-select" bind:value={editingProjectParent}
-                  on:blur={commitEditProject}>
-                  <option value={null}>No parent</option>
-                  {#each $projects.filter(x => x.id !== p.id) as opt}
-                    <option value={opt.id}>{opt.title}</option>
-                  {/each}
-                </select>
-                <button class="save-btn" on:click={commitEditProject}>✓</button>
+
+      {#if activeSection === 'projects'}
+        <div class="content-section">
+          <h3 class="content-title">Projects</h3>
+          <p class="content-hint">Manage projects and their hierarchy. Deleting a project is blocked while it has sub-projects.</p>
+
+          {#if projectError}
+            <p class="delete-error">{projectError}</p>
+          {/if}
+          <div class="item-list">
+            {#each $projects as p (p.id)}
+              <div class="item-row">
+                {#if editingProjectId === p.id}
+                  <div class="project-edit">
+                    <input
+                      class="inline-input"
+                      bind:value={editingProjectTitle}
+                      placeholder="Project name"
+                      on:keydown={e => { if (e.key === 'Enter') commitEditProject(); if (e.key === 'Escape') editingProjectId = null; }}
+                    />
+                    <select class="parent-select" bind:value={editingProjectParent}
+                      on:blur={commitEditProject}>
+                      <option value={null}>No parent</option>
+                      {#each $projects.filter(x => x.id !== p.id) as opt}
+                        <option value={opt.id}>{opt.title}</option>
+                      {/each}
+                    </select>
+                    <button class="save-btn" on:click={commitEditProject}>✓</button>
+                  </div>
+                {:else}
+                  <span class="item-label" on:click={() => startEditProject(p)} on:keydown role="button" tabindex="0">
+                    {projectLabel(p)}
+                  </span>
+                  <button class="del-btn" on:click={() => removeProject(p.id)} title="Delete">✕</button>
+                {/if}
               </div>
+            {/each}
+
+            {#if showNewProject}
+              <input
+                class="inline-input standalone"
+                bind:value={newProjectInput}
+                placeholder="New project name…"
+                on:blur={() => { showNewProject = false; newProjectInput = ''; }}
+                on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addProject(); } if (e.key === 'Escape') { showNewProject = false; newProjectInput = ''; } }}
+                autofocus
+              />
             {:else}
-              <span class="log-type-label" on:click={() => startEditProject(p)} on:keydown role="button" tabindex="0">
-                {projectLabel(p)}
-              </span>
-              <button class="del-btn" on:click={() => removeProject(p.id)} title="Delete">✕</button>
+              <button class="add-btn" on:click={() => showNewProject = true}>+ Add project</button>
             {/if}
           </div>
-        {/each}
+        </div>
+      {/if}
 
-        {#if showNewProject}
-          <input
-            class="inline-input standalone"
-            bind:value={newProjectInput}
-            placeholder="New project name…"
-            on:blur={() => { showNewProject = false; newProjectInput = ''; }}
-            on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addProject(); } if (e.key === 'Escape') { showNewProject = false; newProjectInput = ''; } }}
-            autofocus
-          />
-        {:else}
-          <button class="add-btn" on:click={() => showNewProject = true}>+ Add project</button>
-        {/if}
-      </div>
-    </section>
-
+    </div>
   </div>
 </div>
 
 <style>
   .backdrop {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.4);
+    background: rgba(0,0,0,0.5);
     backdrop-filter: blur(2px);
     z-index: 100;
   }
 
-  .panel {
+  .modal {
     position: fixed;
-    top: 0; right: 0; bottom: 0;
-    width: 380px;
-    max-width: 100vw;
+    top: 10vh; left: 10vw;
+    width: 80vw; height: 80vh;
     background: var(--surface);
-    border-left: 1px solid var(--border);
+    border: 1px solid var(--border);
+    border-radius: 16px;
     z-index: 101;
     display: flex;
     flex-direction: column;
-    box-shadow: -8px 0 40px rgba(0,0,0,0.15);
-    animation: slideIn 0.2s ease;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    animation: popIn 0.18s ease;
   }
 
-  @keyframes slideIn {
-    from { transform: translateX(100%); opacity: 0; }
-    to   { transform: translateX(0);    opacity: 1; }
+  @keyframes popIn {
+    from { opacity: 0; transform: scale(0.97) translateY(8px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
   }
 
-  .panel-header {
+  .modal-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 24px;
+    padding: var(--sp-panel-gap, 20px) var(--sp-panel-pad, 24px);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
@@ -300,27 +356,69 @@
   }
   .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 
-  .panel-body {
-    flex: 1; overflow-y: auto;
-    padding: 24px;
-    display: flex; flex-direction: column; gap: 28px;
+  .modal-body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
   }
 
-  section { display: flex; flex-direction: column; gap: 12px; }
+  .settings-nav {
+    width: 200px; flex-shrink: 0;
+    background: var(--surface-2);
+    border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    padding: var(--sp-panel-gap, 12px);
+    gap: 2px;
+    overflow-y: auto;
+  }
 
-  .section-title {
-    font-size: 11px; font-weight: 700;
-    text-transform: uppercase; letter-spacing: 0.08em;
+  .nav-item {
+    text-align: left;
+    background: none; border: none;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 14px; font-weight: 500;
     color: var(--text-muted);
-    padding-bottom: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-item:hover { background: var(--surface-3); color: var(--text); }
+  .nav-item.active { background: var(--accent); color: #fff; font-weight: 600; }
+
+  .settings-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--sp-panel-pad, 32px);
+  }
+
+  .content-section {
+    display: flex; flex-direction: column; gap: var(--sp-panel-gap, 16px);
+    max-width: 640px;
+  }
+
+  .content-title {
+    margin: 0;
+    font-size: 20px; font-weight: 700;
+    color: var(--text);
+  }
+  .content-hint {
+    margin: -8px 0 4px;
+    font-size: 13px; color: var(--text-muted); line-height: 1.5;
+  }
+
+  .setting-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: var(--sp-panel-gap, 14px) 0;
     border-bottom: 1px solid var(--border);
   }
+  .setting-row:last-child { border-bottom: none; }
+  .setting-info { display: flex; flex-direction: column; gap: 3px; }
+  .setting-label { font-size: 14px; font-weight: 600; color: var(--text); }
+  .setting-desc { font-size: 12px; color: var(--text-muted); max-width: 380px; }
 
   /* Toggle */
-  .toggle-row {
-    display: flex; align-items: center; gap: 12px;
-    cursor: pointer; font-size: 14px; color: var(--text);
-  }
   .toggle-track {
     width: 40px; height: 22px;
     background: var(--border);
@@ -342,8 +440,16 @@
   }
   .toggle-track.on .toggle-thumb { transform: translateX(18px); }
 
+  .density-select {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 12px;
+    color: var(--text); font-size: 13px; font-family: inherit;
+    outline: none; cursor: pointer;
+  }
+  .density-select:focus { border-color: var(--accent); }
+
   /* Category labels */
-  .label-grid { display: flex; flex-direction: column; gap: 8px; }
+  .label-grid { display: flex; flex-direction: column; gap: 10px; }
   .label-row { display: flex; align-items: center; gap: 10px; }
   .cat-dot {
     width: 10px; height: 10px;
@@ -355,7 +461,7 @@
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 7px 10px;
+    padding: 8px 12px;
     color: var(--text);
     font-size: 14px;
     font-family: inherit;
@@ -364,22 +470,22 @@
   }
   .label-row input:focus { border-color: var(--accent); }
 
-  /* Log types */
-  .log-types-list { display: flex; flex-direction: column; gap: 6px; }
+  /* Log types / Projects shared list styles */
+  .item-list { display: flex; flex-direction: column; gap: 6px; }
 
-  .log-type-row {
+  .item-row {
     display: flex; align-items: center; gap: 8px;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 8px 12px;
+    padding: 9px 14px;
   }
 
-  .log-type-label {
+  .item-label {
     flex: 1; font-size: 14px; color: var(--text);
     cursor: pointer;
   }
-  .log-type-label:hover { color: var(--accent); }
+  .item-label:hover { color: var(--accent); }
 
   .del-btn {
     background: none; border: none;
@@ -405,7 +511,7 @@
     background: none;
     border: 1.5px dashed var(--border);
     border-radius: 8px;
-    padding: 8px 12px;
+    padding: 9px 14px;
     cursor: pointer;
     text-align: left;
     font-family: inherit;
@@ -417,9 +523,9 @@
     flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0;
   }
   .parent-select {
-    flex-shrink: 0; width: 110px;
+    flex-shrink: 0; width: 130px;
     background: var(--surface); border: 1px solid var(--border);
-    border-radius: 6px; padding: 3px 6px;
+    border-radius: 6px; padding: 4px 6px;
     color: var(--text); font-size: 12px; font-family: inherit; outline: none;
   }
   .save-btn {
@@ -434,11 +540,11 @@
     background: var(--surface-2);
     border: 1px solid var(--accent);
     border-radius: 8px;
-    padding: 8px 12px;
+    padding: 9px 14px;
   }
 
   .delete-error {
-    margin: 0 0 4px;
+    margin: 0;
     font-size: 12px;
     color: #ef4444;
     background: rgba(239,68,68,0.08);

@@ -35,19 +35,20 @@
         <span class="closed-pill">Closed</span>
       {/if}
     </div>
-    <div class="type-row">
-      {#if logType}
-        <span class="log-type">{logType.label}</span>
-      {/if}
-      {#if log.due_date}
-        <span class="deadline" style="background:{dlColor}; color:{dlText};">{log.due_date}</span>
-      {/if}
-    </div>
   </div>
 
   {#if descPreview}
     <div class="desc" on:click|stopPropagation={handleLinkClick}>{@html descPreview}</div>
   {/if}
+
+  <div class="type-row">
+    {#if log.due_date}
+      <span class="deadline" style="background:{dlColor}; color:{dlText};">{log.due_date}</span>
+    {/if}
+    {#if logType}
+      <span class="log-type">{logType.label}</span>
+    {/if}
+  </div>
 
   <div class="card-footer">
     <div class="badges-row">
@@ -63,12 +64,12 @@
     background: var(--card-bg);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 14px 16px;
+    padding: var(--sp-card-pad, 14px 16px);
     cursor: pointer;
     transition: box-shadow 0.15s, transform 0.12s, border-color 0.15s;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--sp-card-gap-inner, 8px);
     min-width: 0;
     align-self: start;
   }
@@ -91,7 +92,7 @@
   }
 
   .log-type { font-size: 11px; color: var(--text-muted); font-weight: 500; }
-  .type-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .type-row { display: flex; align-items: center; justify-content: flex-start; gap: 8px; }
 
   .desc {
     font-size: 12px; color: var(--text-muted); line-height: 1.5;

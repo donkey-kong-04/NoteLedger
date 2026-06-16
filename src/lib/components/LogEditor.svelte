@@ -243,7 +243,7 @@ if (isNew) {
 
   .panel-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 20px 24px;
+    padding: var(--sp-panel-gap, 20px) var(--sp-panel-pad, 24px);
     border-bottom: 1px solid var(--border);
   }
   h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
@@ -259,13 +259,14 @@ if (isNew) {
   .icon-btn:hover { background: var(--surface-2); color: var(--text); }
 
   .panel-body {
-    flex: 1; overflow-y: auto;
-    padding: 28px 32px;
-    display: flex; flex-direction: column; gap: 16px;
+    flex: 1 1 auto; overflow-y: auto;
+    padding: calc(var(--sp-panel-pad, 24px) + 4px) calc(var(--sp-panel-pad, 24px) + 8px);
+    display: flex; flex-direction: column; gap: var(--sp-panel-gap, 16px);
   }
 
-  .field { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+  .field { display: flex; flex-direction: column; gap: var(--sp-field-gap, 5px); flex: 0 0 auto; }
   .field-row { display: flex; gap: 12px; }
+  .field-row .field { flex: 1; }
 
   label {
     font-size: 12px; font-weight: 600;
@@ -353,7 +354,7 @@ if (isNew) {
 
   .panel-footer {
     display: flex; align-items: center; gap: 10px;
-    padding: 16px 24px;
+    padding: var(--sp-field-gap, 16px) var(--sp-panel-pad, 24px);
     border-top: 1px solid var(--border);
   }
   .spacer { flex: 1; }

@@ -107,7 +107,7 @@
 
   .project-header {
     display: flex; align-items: center; gap: 8px;
-    padding: 10px 14px;
+    padding: var(--sp-card-gap-inner, 10px) calc(var(--sp-card-gap-inner, 10px) + 4px);
     background: var(--surface-2);
     border-bottom: 1px solid var(--border);
   }
@@ -152,7 +152,7 @@
     grid-template-columns: repeat(3, 1fr);
     grid-auto-rows: min-content;
     align-content: start;
-    gap: 8px; padding: 12px;
+    gap: var(--sp-card-gap, 8px); padding: var(--sp-card-gap-inner, 12px);
   }
 
   .empty-project {

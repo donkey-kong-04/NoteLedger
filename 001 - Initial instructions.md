@@ -30,7 +30,7 @@ The application is developed using:
 # Data Model
 
 ### DB Migration versioning
-Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **4**.
+Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **5**.
 
 ### Table: `user_settings`
 Stores application-wide preferences.
@@ -42,6 +42,7 @@ Stores application-wide preferences.
 | category3_label | TEXT | No | — | Display label for Category 3 |
 | category4_label | TEXT | No | — | Display label for Category 4 |
 | dark_mode | BOOLEAN | No | FALSE | Whether the UI is in dark mode |
+| density | TEXT | No | 'normal' | Layout density: `compact`, `normal`, or `comfortable` (picklist only — no free-form values) |
 
 ### Table: `user_customizable_input`
 Picklist values for each user-customizable input (four categories + log type).
@@ -113,10 +114,14 @@ Each log can have **multiple values** assigned per category slot.
 
 The main screen is divided into four zones:
 
-- **Menu bar (top)**: Book icon logo, "Show closed" toggle, project filter dropdown, "✕ Clear filters" button (shown only when any filter is active), "+ New Project" button, per-log-type "New" buttons (e.g. "+ Task", "+ Decision"), dark mode toggle, settings gear (⚙️).
+- **Menu bar (top)**: split into two groups.
+  - **Left group**: Book icon logo, "Show closed" toggle, project filter dropdown, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
+  - **Right group** (`nav`): "+ New Project" button, per-log-type "New" buttons (e.g. "+ Task", "+ Decision"), settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
 - **Top area (main column)**: Category 3 and Category 4 filter badges, side by side.
 - **Left sidebar (230px)**: Category 1 and Category 2 filter badges, arranged horizontally with wrapping. Category 1 is at the top, directly below the menu bar.
 - **Main area**: Log and project cards in a 3-column grid.
+
+All spacing in the menu bar, sidebar, top category bar, main grid, log/project cards, settings modal, and log/project editors is controlled by the **Layout density** setting (see Settings Panel).
 
 ### Closed Logs Toggle
 
@@ -133,7 +138,7 @@ A `<select>` in the menu bar listing all projects (indented to show hierarchy). 
 
 ### Clear Filters Button
 
-A **"✕ Clear filters"** button appears in the menu bar whenever any filter is active (any category, project filter, or show-closed toggle). Clicking it resets all filters at once.
+A **"✕ Clear filters"** button sits in the menu bar's left group, next to the project filter dropdown. It is **always visible** (not conditional) — clicking it resets all filters (categories, project, show-closed) at once. Always-visible by design: users tend to click it by default just to reassure themselves nothing is filtered.
 
 ### New Log Buttons
 
@@ -141,11 +146,13 @@ When at least one log type is configured, the generic "+ New Log" button is repl
 
 ### Settings Panel (⚙️)
 
-Accessible from the menu bar. Contains four sections:
-1. **Appearance** — dark/light mode toggle
+A **centered modal** (80vw × 80vh, rounded corners) with a left-side section nav and content area on the right — not a slide-in panel. Sections:
+1. **Appearance** — dark/light mode toggle; **Layout density** picklist (Compact / Normal / Comfortable) controlling spacing app-wide
 2. **Category Labels** — rename the 4 category labels
 3. **Log Types** — add, rename, delete log types (delete blocked if logs use it)
 4. **Projects** — add, rename, delete projects with parent picker
+
+Each section has a title and a short description above its controls. Settings rows use a consistent `label + description` on the left, control on the right pattern.
 
 ### Category Filters
 
@@ -176,10 +183,10 @@ Badge style:
 
 ### Log Card (View Mode)
 
-Each log card shows:
+Each log card shows, top to bottom:
 - **Title** (dimmed if closed)
-- **Log type** label and **Deadline date** on the same line (deadline right-aligned). Deadline color: 🔴 past, 🟡 within 7 days, 🟢 beyond 7 days
 - **Description** (rendered as rich text, clamped to 3 lines by default)
+- **Deadline date** and **Log type** label on the same line, packed together on the left (date first, then type — not spread across the row). Deadline color: 🔴 past, 🟡 within 7 days, 🟢 beyond 7 days
 - **Category badges** at the bottom (all assigned values across all 4 categories)
 - **CLOSED** badge if the log is closed
 - **On hover**: card expands in place to show the full description (smooth transition, card grows downward only via `align-self: start`)

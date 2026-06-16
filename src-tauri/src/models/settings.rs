@@ -7,6 +7,7 @@ pub struct UserSettings {
     pub category3_label: String,
     pub category4_label: String,
     pub dark_mode: bool,
+    pub density: String,
 }
 
 impl Default for UserSettings {
@@ -17,6 +18,7 @@ impl Default for UserSettings {
             category3_label: "Category 3".to_string(),
             category4_label: "Category 4".to_string(),
             dark_mode: false,
+            density: "normal".to_string(),
         }
     }
 }

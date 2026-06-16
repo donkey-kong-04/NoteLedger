@@ -10,6 +10,42 @@
   import { settings, picklists, projects, logs, loadAll, saveSettings } from '$lib/store';
   import type { Log, Project } from '$lib/types';
 
+  const DENSITY_VARS: Record<string, Record<string, string>> = {
+    compact: {
+      '--sp-main-pad': '10px',
+      '--sp-card-gap': '6px',
+      '--sp-sidebar-pad': '8px',
+      '--sp-topcat-pad': '6px 10px',
+      '--sp-card-pad': '8px 10px',
+      '--sp-card-gap-inner': '4px',
+      '--sp-panel-pad': '14px',
+      '--sp-panel-gap': '12px',
+      '--sp-field-gap': '4px',
+    },
+    normal: {
+      '--sp-main-pad': '24px',
+      '--sp-card-gap': '12px',
+      '--sp-sidebar-pad': '16px',
+      '--sp-topcat-pad': '10px 16px',
+      '--sp-card-pad': '14px 16px',
+      '--sp-card-gap-inner': '8px',
+      '--sp-panel-pad': '24px',
+      '--sp-panel-gap': '16px',
+      '--sp-field-gap': '5px',
+    },
+    comfortable: {
+      '--sp-main-pad': '32px',
+      '--sp-card-gap': '18px',
+      '--sp-sidebar-pad': '22px',
+      '--sp-topcat-pad': '16px 22px',
+      '--sp-card-pad': '20px 22px',
+      '--sp-card-gap-inner': '12px',
+      '--sp-panel-pad': '32px',
+      '--sp-panel-gap': '22px',
+      '--sp-field-gap': '8px',
+    },
+  };
+
   let editorLog: Log | null = null;
   let showEditor = false;
   let showSettings = false;
@@ -49,12 +85,9 @@
     await saveSettings({ ...s, category1_label: cat1Label, category2_label: cat2Label, category3_label: cat3Label, category4_label: cat4Label });
   }
 
-  async function toggleDark() {
-    const s = get(settings);
-    await saveSettings({ ...s, dark_mode: !s.dark_mode });
-  }
-
   $: isDark = $settings.dark_mode;
+  $: densityStyle = Object.entries(DENSITY_VARS[$settings.density] ?? DENSITY_VARS.normal)
+    .map(([k, v]) => `${k}:${v}`).join(';');
 
   $: logTypes = $picklists.filter(v => v.picklist_type === 'log_type');
   const byLabel = (a: {label: string}, b: {label: string}) => a.label.localeCompare(b.label);
@@ -170,32 +203,32 @@
   }
 </script>
 
-<div class="app" class:dark={isDark}>
+<div class="app" class:dark={isDark} style={densityStyle}>
 
   <header class="menu-bar">
-    <svg width="36" height="40" viewBox="0 0 36 40" aria-label="Note Ledger">
-      <rect x="0" y="1" width="6" height="38" rx="1.5" fill="#4f46e5"/>
-      <rect x="6" y="1" width="27" height="38" rx="1.5" fill="#6366f1"/>
-      <rect x="32" y="3" width="4" height="34" rx="0.5" fill="#e0e7ff"/>
-      <line x1="32" y1="9"  x2="36" y2="9"  stroke="#a5b4fc" stroke-width="0.6"/>
-      <line x1="32" y1="15" x2="36" y2="15" stroke="#a5b4fc" stroke-width="0.6"/>
-      <line x1="32" y1="21" x2="36" y2="21" stroke="#a5b4fc" stroke-width="0.6"/>
-      <line x1="32" y1="27" x2="36" y2="27" stroke="#a5b4fc" stroke-width="0.6"/>
-      <line x1="32" y1="33" x2="36" y2="33" stroke="#a5b4fc" stroke-width="0.6"/>
-      <text
-        x="19" y="20"
-        text-anchor="middle" dominant-baseline="middle"
-        transform="rotate(-90, 19, 20)"
-        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-        font-size="6.5" font-weight="800" fill="#fff" opacity="0.95" letter-spacing="0.3">NLedger</text>
-    </svg>
-    <label class="toggle-wrap" title="Show closed logs">
-      <span class="toggle-switch" class:on={showClosed} on:click={() => showClosed = !showClosed} role="switch" aria-checked={showClosed} tabindex="0" on:keydown={e => e.key === ' ' && (showClosed = !showClosed)}>
-        <span class="toggle-thumb"></span>
-      </span>
-      <span class="toggle-label">Show closed</span>
-    </label>
-    <nav class="menu-nav">
+    <div class="menu-left">
+      <svg width="36" height="40" viewBox="0 0 36 40" aria-label="Note Ledger">
+        <rect x="0" y="1" width="6" height="38" rx="1.5" fill="#4f46e5"/>
+        <rect x="6" y="1" width="27" height="38" rx="1.5" fill="#6366f1"/>
+        <rect x="32" y="3" width="4" height="34" rx="0.5" fill="#e0e7ff"/>
+        <line x1="32" y1="9"  x2="36" y2="9"  stroke="#a5b4fc" stroke-width="0.6"/>
+        <line x1="32" y1="15" x2="36" y2="15" stroke="#a5b4fc" stroke-width="0.6"/>
+        <line x1="32" y1="21" x2="36" y2="21" stroke="#a5b4fc" stroke-width="0.6"/>
+        <line x1="32" y1="27" x2="36" y2="27" stroke="#a5b4fc" stroke-width="0.6"/>
+        <line x1="32" y1="33" x2="36" y2="33" stroke="#a5b4fc" stroke-width="0.6"/>
+        <text
+          x="19" y="20"
+          text-anchor="middle" dominant-baseline="middle"
+          transform="rotate(-90, 19, 20)"
+          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+          font-size="6.5" font-weight="800" fill="#fff" opacity="0.95" letter-spacing="0.3">NLedger</text>
+      </svg>
+      <label class="toggle-wrap" title="Show closed logs">
+        <span class="toggle-switch" class:on={showClosed} on:click={() => showClosed = !showClosed} role="switch" aria-checked={showClosed} tabindex="0" on:keydown={e => e.key === ' ' && (showClosed = !showClosed)}>
+          <span class="toggle-thumb"></span>
+        </span>
+        <span class="toggle-label">Show closed</span>
+      </label>
       {#if $projects.length > 0}
         <select class="project-filter" value={selProject === null ? '' : String(selProject)} on:change={e => { const v = (e.target as HTMLSelectElement).value; selProject = v === '' ? null : Number(v); }}>
           <option value="">All projects</option>
@@ -204,9 +237,9 @@
           {/each}
         </select>
       {/if}
-      {#if anyFilterActive}
-        <button class="btn-clear-filters" on:click={clearAllFilters}>✕ Clear filters</button>
-      {/if}
+      <button class="btn-clear-filters" on:click={clearAllFilters}>✕ Clear filters</button>
+    </div>
+    <nav class="menu-nav">
       <button class="btn-secondary-sm" on:click={openNewProject}>+ New Project</button>
       {#if logTypes.length > 0}
         {#each logTypes as lt}
@@ -215,7 +248,6 @@
       {:else}
         <button class="btn-new" on:click={() => openNew()}>+ New Log</button>
       {/if}
-      <button class="theme-toggle" on:click={toggleDark} title="Toggle dark mode">{isDark ? '☀️' : '🌙'}</button>
       <button class="theme-toggle" on:click={() => showSettings = true} title="Settings">⚙️</button>
     </nav>
   </header>
@@ -329,6 +361,8 @@
     flex-shrink: 0; z-index: 10;
   }
 
+  .menu-left { display: flex; align-items: center; gap: 16px; }
+
   .menu-nav { display: flex; align-items: center; gap: 10px; }
 
   .theme-toggle {
@@ -361,7 +395,7 @@
     background: var(--surface); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; overflow: hidden; min-height: 0;
   }
-  .sidebar-cat { flex: 1; overflow-y: auto; padding: 16px; min-height: 0; }
+  .sidebar-cat { flex: 1; overflow-y: auto; padding: var(--sp-sidebar-pad); min-height: 0; }
   .sidebar-separator { height: 1px; background: var(--border); flex-shrink: 0; margin: 0 12px; }
 
   .top-cats {
@@ -369,12 +403,12 @@
     display: flex; flex-direction: row; align-items: stretch;
     background: var(--surface); border-bottom: 1px solid var(--border);
   }
-  .top-cat-col { flex: 1; padding: 10px 16px; min-width: 0; }
+  .top-cat-col { flex: 1; padding: var(--sp-topcat-pad); min-width: 0; }
   .top-cat-separator { width: 1px; background: var(--border); flex-shrink: 0; }
 
   .main {
     grid-column: 2; grid-row: 2;
-    display: flex; flex-direction: column; overflow: hidden; padding: 24px; min-height: 0;
+    display: flex; flex-direction: column; overflow: hidden; padding: var(--sp-main-pad); min-height: 0;
   }
 
   .btn-new {
@@ -437,7 +471,7 @@
     grid-template-columns: repeat(3, 1fr);
     grid-auto-rows: min-content;
     align-content: start;
-    gap: 12px; padding-right: 4px;
+    gap: var(--sp-card-gap); padding-right: 4px;
   }
 
   .empty {

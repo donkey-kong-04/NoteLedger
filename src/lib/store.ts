@@ -8,6 +8,7 @@ export const settings = writable<UserSettings>({
   category3_label: 'Category 3',
   category4_label: 'Category 4',
   dark_mode: false,
+  density: 'normal',
 });
 
 export const picklists = writable<PicklistValue[]>([]);

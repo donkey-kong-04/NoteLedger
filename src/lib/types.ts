@@ -1,9 +1,12 @@
+export type Density = 'compact' | 'normal' | 'comfortable';
+
 export interface UserSettings {
   category1_label: string;
   category2_label: string;
   category3_label: string;
   category4_label: string;
   dark_mode: boolean;
+  density: Density;
 }
 
 export interface PicklistValue {
