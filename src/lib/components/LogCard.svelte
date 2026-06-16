@@ -25,9 +25,17 @@
   $: descPreview = log.description ?? '';
   $: dlColor = log.due_date ? deadlineColor(log.due_date) : null;
   $: dlText = dlColor ? contrastText(dlColor) : '#fff';
+
+  let hovered = false;
 </script>
 
-<article class="card" class:closed={log.is_closed} on:click={() => dispatch('edit', log)} role="button" tabindex="0" on:keydown={e => e.key === 'Enter' && dispatch('edit', log)}>
+<article
+  class="card" class:closed={log.is_closed}
+  on:click={() => dispatch('edit', log)}
+  on:mouseenter={() => hovered = true}
+  on:mouseleave={() => hovered = false}
+  role="button" tabindex="0" on:keydown={e => e.key === 'Enter' && dispatch('edit', log)}
+>
   <div class="card-top">
     <div class="title-row">
       <span class="title">{log.title}</span>
@@ -37,10 +45,6 @@
     </div>
   </div>
 
-  {#if descPreview}
-    <div class="desc" on:click|stopPropagation={handleLinkClick}>{@html descPreview}</div>
-  {/if}
-
   <div class="type-row">
     {#if log.due_date}
       <span class="deadline" style="background:{dlColor}; color:{dlText};">{log.due_date}</span>
@@ -49,6 +53,10 @@
       <span class="log-type">{logType.label}</span>
     {/if}
   </div>
+
+  {#if descPreview}
+    <div class="desc" class:expanded={hovered} on:click={handleLinkClick}>{@html descPreview}</div>
+  {/if}
 
   <div class="card-footer">
     <div class="badges-row">
@@ -104,7 +112,7 @@
     -webkit-line-clamp: 3;
     transition: max-height 0.3s ease;
   }
-  .card:hover .desc {
+  .desc.expanded {
     max-height: 2000px;
     -webkit-line-clamp: unset;
     display: block;

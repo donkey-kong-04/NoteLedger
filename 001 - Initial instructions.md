@@ -185,12 +185,12 @@ Badge style:
 
 Each log card shows, top to bottom:
 - **Title** (dimmed if closed)
-- **Description** (rendered as rich text, clamped to 3 lines by default)
 - **Deadline date** and **Log type** label on the same line, packed together on the left (date first, then type — not spread across the row). Deadline color: 🔴 past, 🟡 within 7 days, 🟢 beyond 7 days
+- **Description** (rendered as rich text, clamped to 3 lines by default)
 - **Category badges** at the bottom (all assigned values across all 4 categories)
 - **CLOSED** badge if the log is closed
-- **On hover**: card expands in place to show the full description (smooth transition, card grows downward only via `align-self: start`)
-- **Links in description**: clickable — opens in the system default browser via Tauri opener plugin
+- **On hover**: description expands in place to show the full text (smooth transition, card grows downward only via `align-self: start`)
+- **Links in description**: clickable — opens in the system default browser via Tauri opener plugin. Clicking elsewhere in the description (not a link) still opens the Log Editor like the rest of the card.
 
 ### Project Cards
 
