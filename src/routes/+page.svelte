@@ -10,6 +10,7 @@
   import SettingsPanel from '$lib/components/SettingsPanel.svelte';
   import { settings, picklists, projects, logs, projectLinks, loadAll, saveSettings } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
+  import { sortedProjectOptions } from '$lib/types';
 
   const DENSITY_VARS: Record<string, Record<string, string>> = {
     compact: {
@@ -202,17 +203,7 @@
   $: visibleTopLevelProjects = topLevelProjects.filter(p => visibleProjectIds.has(p.id));
   $: unassignedLogs = [] as Log[];
 
-  // Build flat project list for dropdown (indented to show hierarchy)
-  function buildProjectOptions(projects: Project[], parentId: number | null = null, depth = 0): {id: number, label: string}[] {
-    return projects
-      .filter(p => (p.parent_id == null) === (parentId == null) && (parentId == null || Number(p.parent_id) === parentId))
-      .sort((a, b) => a.title.localeCompare(b.title))
-      .flatMap(p => [
-        { id: p.id, label: '  '.repeat(depth) + p.title },
-        ...buildProjectOptions(projects, p.id, depth + 1)
-      ]);
-  }
-  $: projectOptions = buildProjectOptions($projects);
+  $: projectOptions = sortedProjectOptions($projects);
 
   function openNew(typeId: number | null = null, projectId: number | null = null) {
     editorLog = (typeId !== null || projectId !== null)
