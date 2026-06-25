@@ -49,9 +49,18 @@
   let addDraft: Record<number, string> = { 1: '', 2: '', 3: '', 4: '' };
   let pendingAdd: Promise<void> = Promise.resolve();
 
-  async function addAndSelect(slot: 1|2|3|4) {
+  function filteredVals(vals: PicklistValue[], q: string) {
+    const query = q.trim().toLowerCase();
+    return query ? vals.filter(v => v.label.toLowerCase().includes(query)) : vals;
+  }
+
+  async function addAndSelect(slot: 1|2|3|4, vals: PicklistValue[]) {
     const trimmed = addDraft[slot].trim();
-    if (!trimmed) { showAddInput[slot] = false; return; }
+    if (!trimmed) { addDraft[slot] = ''; showAddInput[slot] = false; return; }
+    // Exact match → toggle existing value
+    const exact = vals.find(v => v.label.toLowerCase() === trimmed.toLowerCase());
+    if (exact) { toggleCat(slot, exact.id); addDraft[slot] = ''; showAddInput[slot] = false; return; }
+    // No match → create new and select
     addDraft[slot] = '';
     showAddInput[slot] = false;
     const p = createPicklistValue(`category_${slot}`, trimmed).then(newVal => {
@@ -152,7 +161,20 @@
         <div class="cat-field">
           <div class="cat-field-label" style="color:{color}">{cat.label}</div>
           <div class="cat-badges">
-            {#each cat.vals as v (v.id)}
+            {#if showAddInput[cat.slot]}
+              <input
+                class="inline-add-input"
+                style="border-color:{color}; outline-color:{color}"
+                bind:value={addDraft[cat.slot]}
+                placeholder="Search or add…"
+                on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addAndSelect(cat.slot, cat.vals); } if (e.key === 'Escape' || e.key === 'Tab') { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; } }}
+                on:blur={() => setTimeout(() => { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; }, 150)}
+                autofocus
+              />
+            {:else}
+              <button class="inline-add-btn" style="--cat-color:{color}" on:click={() => showAddInput[cat.slot] = true}>Add or search</button>
+            {/if}
+            {#each filteredVals(cat.vals, addDraft[cat.slot]) as v (v.id)}
               <Badge
                 label={v.label}
                 catType="category_{cat.slot}"
@@ -161,19 +183,6 @@
                 size="sm"
               />
             {/each}
-            {#if showAddInput[cat.slot]}
-              <input
-                class="inline-add-input"
-                style="border-color:{color}; outline-color:{color}"
-                bind:value={addDraft[cat.slot]}
-                placeholder="New value…"
-                on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addAndSelect(cat.slot); } if (e.key === 'Escape' || e.key === 'Tab') { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; } }}
-                on:blur={() => { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; }}
-                autofocus
-              />
-            {:else}
-              <button class="inline-add-btn" style="--cat-color:{color}" on:click={() => showAddInput[cat.slot] = true}>+ Add</button>
-            {/if}
             {#if cat.vals.length === 0 && !showAddInput[cat.slot]}
               <span class="no-vals">No values</span>
             {/if}

@@ -17,8 +17,12 @@
 
   let editingLabel = false;
   let labelDraft = label;
-  let newValueInput = '';
-  let showNewInput = false;
+  let searchText = '';
+  let showSearch = false;
+  let inputEl: HTMLInputElement;
+
+  $: query = searchText.trim().toLowerCase();
+  $: filteredValues = query ? values.filter(v => v.label.toLowerCase().includes(query)) : values;
 
   function toggleValue(id: number) {
     if (selected.includes(id)) {
@@ -62,18 +66,37 @@
 
   function cancelEdit() { editingId = null; }
 
-  async function addValue() {
-    const trimmed = newValueInput.trim();
+  async function handleEnter() {
+    const trimmed = searchText.trim();
+    if (!trimmed) { closeSearch(); return; }
+    // If exact match exists, toggle it instead of creating
+    const exact = values.find(v => v.label.toLowerCase() === trimmed.toLowerCase());
+    if (exact) {
+      toggleValue(exact.id);
+      closeSearch();
+      return;
+    }
+    // Otherwise create a new value and auto-select it
     const type = catType;
-    newValueInput = '';
-    showNewInput = false;
-    if (!trimmed) return;
+    searchText = '';
+    showSearch = false;
     try {
-      await createPicklistValue(type, trimmed);
+      const newVal = await createPicklistValue(type, trimmed);
+      toggleValue(newVal.id);
       lastError = '';
     } catch (e) {
       lastError = `Error [${type}]: ${e}`;
     }
+  }
+
+  function closeSearch() {
+    showSearch = false;
+    searchText = '';
+  }
+
+  function openSearch() {
+    showSearch = true;
+    // focus handled by autofocus / bind:this
   }
 
   function commitLabel() {
@@ -105,7 +128,25 @@
   {/if}
 
   <div class="badges" class:wrap={layout === 'horizontal'}>
-    {#each values as val (val.id)}
+    <!-- Search/add input always at the beginning -->
+    {#if showSearch}
+      <input
+        class="search-input"
+        bind:value={searchText}
+        bind:this={inputEl}
+        placeholder="Search or add…"
+        on:blur={() => setTimeout(closeSearch, 150)}
+        on:keydown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); handleEnter(); }
+          if (e.key === 'Escape') closeSearch();
+        }}
+        autofocus
+      />
+    {:else}
+      <button class="add-btn" on:click={openSearch}>Add or search</button>
+    {/if}
+
+    {#each filteredValues as val (val.id)}
       <div class="badge-row">
         {#if editingId === val.id}
           <input
@@ -129,19 +170,6 @@
         {/if}
       </div>
     {/each}
-
-    {#if showNewInput}
-      <input
-        class="new-val-input"
-        bind:value={newValueInput}
-        placeholder="New value…"
-        on:blur={() => { showNewInput = false; }}
-        on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addValue(); } if (e.key === 'Escape') { newValueInput = ''; showNewInput = false; } }}
-        autofocus
-      />
-    {:else}
-      <button class="add-btn" on:click={() => showNewInput = true}>+ Add</button>
-    {/if}
   </div>
 </div>
 
@@ -221,12 +249,13 @@
     cursor: pointer;
     transition: color 0.15s, border-color 0.15s;
     font-family: inherit;
+    white-space: nowrap;
   }
   .add-btn:hover { color: var(--text); border-color: var(--text-muted); }
 
   .err { font-size: 10px; color: #ef4444; word-break: break-all; }
 
-  .new-val-input {
+  .search-input {
     font-size: 11px;
     border: 1.5px solid var(--accent);
     border-radius: 999px;
@@ -234,7 +263,7 @@
     background: var(--surface);
     color: var(--text);
     outline: none;
-    width: 100px;
+    width: 110px;
     font-family: inherit;
   }
 </style>

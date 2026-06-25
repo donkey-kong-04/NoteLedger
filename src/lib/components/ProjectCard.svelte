@@ -165,7 +165,11 @@
     {/if}
 
     {#if ownLogs.length === 0 && visibleSubProjects.length === 0 && !ancestorOnlyProjectIds.has(project.id)}
-      <p class="empty">No logs yet — click <strong>+</strong> to add one.</p>
+      {#if ownLogsTotal.length > 0}
+        <p class="empty">No logs matching the filters.</p>
+      {:else}
+        <p class="empty">No logs yet — click <strong>+</strong> to add one.</p>
+      {/if}
     {/if}
   {/if}
 </div>
@@ -339,7 +343,7 @@
 
   .empty {
     font-size: 12px; color: var(--text-muted);
-    margin: 0; padding-top: 8px; padding-bottom: 8px; padding-right: 10px;
+    margin: 0; padding: 8px 10px;
     box-sizing: border-box;
   }
 </style>
