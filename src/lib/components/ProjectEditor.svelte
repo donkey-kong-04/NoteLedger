@@ -25,7 +25,7 @@
     category2_ids: [...(project.category2_ids ?? [])],
     category3_ids: [...(project.category3_ids ?? [])],
     category4_ids: [...(project.category4_ids ?? [])],
-  } : { id: 0, title: '', description: '', parent_id: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
+  } : { id: 0, title: '', description: '', parent_id: null, is_closed: false, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
 
   let confirmDelete = false;
   let error = '';
@@ -113,14 +113,33 @@
       <textarea bind:value={draft.description} rows="3" placeholder="What is this project about?"></textarea>
     </div>
 
-    <div class="field">
-      <label>Parent project</label>
-      <select bind:value={draft.parent_id}>
+    <div class="field-row">
+      <div class="field">
+        <label>Start Date</label>
+        <input type="date" value={draft.start_date ?? ''} on:change={e => draft = { ...draft, start_date: (e.target as HTMLInputElement).value || null }} />
+      </div>
+      <div class="field">
+        <label>End Date</label>
+        <input type="date" value={draft.end_date ?? ''} on:change={e => draft = { ...draft, end_date: (e.target as HTMLInputElement).value || null }} />
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field" style="flex:3">
+        <label>Parent project</label>
+        <select bind:value={draft.parent_id}>
         <option value={null}>None (top-level)</option>
         {#each availableParents as p}
           <option value={p.id}>{p.title}</option>
         {/each}
       </select>
+      </div>
+      <div class="field">
+        <label>Closed</label>
+        <label class="toggle-row">
+          <input type="checkbox" class="closed-check" bind:checked={draft.is_closed} />
+        </label>
+      </div>
     </div>
 
     <div class="section-title">Default Categories</div>
@@ -212,6 +231,8 @@
   .icon-btn:hover { background: var(--surface-2); color: var(--text); }
   .panel-body { flex: 1; overflow-y: auto; padding: var(--sp-panel-pad, 24px); display: flex; flex-direction: column; gap: var(--sp-panel-gap, 16px); }
   .field { display: flex; flex-direction: column; gap: var(--sp-field-gap, 5px); }
+  .field-row { display: flex; gap: 12px; }
+  .field-row .field { flex: 1; }
   label { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
   .req { color: var(--accent); }
   input, textarea, select {
@@ -222,6 +243,8 @@
   input:focus, textarea:focus, select:focus { border-color: var(--accent); }
   textarea { resize: vertical; min-height: 80px; }
   .error { font-size: 13px; color: #ef4444; background: rgba(239,68,68,0.08); border-radius: 6px; padding: 8px 12px; margin: 0; }
+  .toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; text-transform: none; letter-spacing: normal; color: var(--text); width: fit-content; }
+  .closed-check { width: auto; }
 
   .section-title {
     font-size: 12px; font-weight: 700;

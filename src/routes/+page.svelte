@@ -96,61 +96,106 @@
   $: cat3Vals = $picklists.filter(v => v.picklist_type === 'category_3').sort(byLabel);
   $: cat4Vals = $picklists.filter(v => v.picklist_type === 'category_4').sort(byLabel);
 
-  $: filtersActive = selCat1.length > 0 || selCat2.length > 0 || selCat3.length > 0 || selCat4.length > 0 || selProject !== null;
-  $: catOrCloseFilterActive = selCat1.length > 0 || selCat2.length > 0 || selCat3.length > 0 || selCat4.length > 0 || showClosed;
-  $: anyFilterActive = filtersActive || showClosed;
-
   function clearAllFilters() {
     selCat1 = []; selCat2 = []; selCat3 = []; selCat4 = [];
     selProject = null;
     showClosed = false;
   }
 
-  function getSubtreeIds(projectId: number): Set<number> {
+  // ── Tree helpers ─────────────────────────────────────────────────────────
+
+  function getAncestorIds(projects: Project[], projectId: number): Set<number> {
     const ids = new Set<number>([projectId]);
-    $projects.filter(p => p.parent_id !== null && Number(p.parent_id) === projectId)
-      .forEach(child => getSubtreeIds(child.id).forEach(id => ids.add(id)));
+    const p = projects.find(p => p.id === projectId);
+    if (p?.parent_id != null)
+      for (const id of getAncestorIds(projects, Number(p.parent_id))) ids.add(id);
     return ids;
   }
 
-  function getRootAncestorId(projectId: number): number {
-    const p = $projects.find(p => p.id === projectId);
-    if (!p || p.parent_id == null) return projectId;
-    return getRootAncestorId(Number(p.parent_id));
+  function getDescendantIds(projects: Project[], projectId: number): Set<number> {
+    const ids = new Set<number>([projectId]);
+    projects
+      .filter(p => p.parent_id != null && Number(p.parent_id) === projectId)
+      .forEach(child => getDescendantIds(projects, child.id).forEach(id => ids.add(id)));
+    return ids;
   }
 
-  $: subtreeIds = selProject !== null ? getSubtreeIds(selProject) : null;
+  // ── Category matching (AND logic across all selected values) ─────────────
 
-  function ancestorCatIds(projectId: number, slot: 1|2|3|4): number[] {
-    const p = $projects.find(p => p.id === projectId);
+  function ancestorCatIds(projects: Project[], projectId: number, slot: 1|2|3|4): number[] {
+    const p = projects.find(p => p.id === projectId);
     if (!p) return [];
     const own = p[`category${slot}_ids`] as number[];
-    if (p.parent_id != null) return [...own, ...ancestorCatIds(Number(p.parent_id), slot)];
+    if (p.parent_id != null) return [...own, ...ancestorCatIds(projects, Number(p.parent_id), slot)];
     return own;
   }
 
-  function logPassesCat(l: import('$lib/types').Log, slot: 1|2|3|4, sel: number[]): boolean {
+  function logMatchesSlot(l: Log, slot: 1|2|3|4, sel: number[], projects: Project[]): boolean {
     if (!sel.length) return true;
-    const logIds = l[`category${slot}_ids`];
-    const projIds = l.project_id != null ? ancestorCatIds(Number(l.project_id), slot) : [];
-    return sel.every(id => logIds.includes(id) || projIds.includes(id));
+    const available = new Set([
+      ...l[`category${slot}_ids`],
+      ...ancestorCatIds(projects, Number(l.project_id), slot),
+    ]);
+    return sel.every(id => available.has(id));
   }
 
-  $: filtered = $logs.filter(l => {
-    if (!showClosed && l.is_closed) return false;
-    if (!logPassesCat(l, 1, selCat1)) return false;
-    if (!logPassesCat(l, 2, selCat2)) return false;
-    if (!logPassesCat(l, 3, selCat3)) return false;
-    if (!logPassesCat(l, 4, selCat4)) return false;
-    if (subtreeIds !== null && (l.project_id == null || !subtreeIds.has(Number(l.project_id)))) return false;
-    return true;
-  });
+  $: noCatFilter = !selCat1.length && !selCat2.length && !selCat3.length && !selCat4.length;
+
+  $: matchingLogs = $logs.filter(l =>
+    logMatchesSlot(l, 1, selCat1, $projects) &&
+    logMatchesSlot(l, 2, selCat2, $projects) &&
+    logMatchesSlot(l, 3, selCat3, $projects) &&
+    logMatchesSlot(l, 4, selCat4, $projects)
+  );
+
+  // ── Project visibility ───────────────────────────────────────────────────
+
+  function subtreeHasLogs(projects: Project[], logs: Log[], projectId: number): boolean {
+    const subtree = getDescendantIds(projects, projectId);
+    return logs.some(l => subtree.has(Number(l.project_id)));
+  }
+
+  function computeVisibility(
+    projects: Project[], logs: Log[],
+    selProject: number | null, showClosed: boolean, noCatFilter: boolean
+  ): { visible: Set<number>; ancestorOnly: Set<number> } {
+    const visible = new Set<number>();
+    const ancestorOnly = new Set<number>();
+
+    if (selProject !== null) {
+      // Ancestor projects: shown as context without logs
+      for (const aid of getAncestorIds(projects, selProject)) {
+        if (aid !== selProject) { visible.add(aid); ancestorOnly.add(aid); }
+      }
+      // Selected project: always shown (ignore show-closed for itself)
+      visible.add(selProject);
+      // Descendants of selected project
+      for (const did of getDescendantIds(projects, selProject)) {
+        if (did === selProject) continue;
+        const p = projects.find(p => p.id === did);
+        if (!p) continue;
+        // No category filter: show all descendants (including closed) — user explicitly chose this project
+        if (noCatFilter) { visible.add(did); continue; }
+        // Category filter active: respect show-closed, only show if subtree has matching logs
+        if (p.is_closed && !showClosed) continue;
+        if (subtreeHasLogs(projects, logs, did)) visible.add(did);
+      }
+    } else {
+      for (const p of projects) {
+        if (p.is_closed && !showClosed) continue;
+        if (noCatFilter || subtreeHasLogs(projects, logs, p.id)) visible.add(p.id);
+      }
+    }
+
+    return { visible, ancestorOnly };
+  }
+
+  $: ({ visible: visibleProjectIds, ancestorOnly: ancestorOnlyProjectIds } =
+    computeVisibility($projects, matchingLogs, selProject, showClosed, noCatFilter));
 
   $: topLevelProjects = $projects.filter(p => p.parent_id == null);
-  $: visibleTopLevelProjects = selProject !== null
-    ? topLevelProjects.filter(p => p.id === getRootAncestorId(selProject!))
-    : topLevelProjects;
-  $: unassignedLogs = selProject !== null ? [] : filtered.filter(l => l.project_id == null);
+  $: visibleTopLevelProjects = topLevelProjects.filter(p => visibleProjectIds.has(p.id));
+  $: unassignedLogs = [] as Log[];
 
   // Build flat project list for dropdown (indented to show hierarchy)
   function buildProjectOptions(projects: Project[], parentId: number | null = null, depth = 0): {id: number, label: string}[] {
@@ -158,26 +203,15 @@
       .filter(p => (p.parent_id == null) === (parentId == null) && (parentId == null || Number(p.parent_id) === parentId))
       .sort((a, b) => a.title.localeCompare(b.title))
       .flatMap(p => [
-        { id: p.id, label: '  '.repeat(depth) + p.title },
+        { id: p.id, label: '  '.repeat(depth) + p.title },
         ...buildProjectOptions(projects, p.id, depth + 1)
       ]);
   }
   $: projectOptions = buildProjectOptions($projects);
 
-  function projectHasAnyLogs(projectId: number): boolean {
-    if (filtered.some(l => Number(l.project_id) === Number(projectId))) return true;
-    return $projects
-      .filter(p => p.parent_id != null && Number(p.parent_id) === Number(projectId))
-      .some(sub => projectHasAnyLogs(sub.id));
-  }
-
-  function subProjectsOf(projectId: number): Project[] {
-    return $projects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(projectId));
-  }
-
   function openNew(typeId: number | null = null, projectId: number | null = null) {
     editorLog = (typeId !== null || projectId !== null)
-      ? ({ type_id: typeId ?? logTypes[0]?.id ?? 0, project_id: projectId } as any)
+      ? ({ type_id: typeId ?? logTypes[0]?.id ?? 0, project_id: projectId ?? $projects[0]?.id ?? 0 } as any)
       : null;
     showEditor = true;
   }
@@ -198,8 +232,8 @@
 
   function closeProjectEditor() { showProjectEditor = false; editorProject = null; }
 
-  function openNewLogInProject(e: CustomEvent<Project>) {
-    openNew(null, e.detail.id);
+  function openNewLogInProject(e: CustomEvent<{ project: Project; typeId: number }>) {
+    openNew(e.detail.typeId, e.detail.project.id);
   }
 </script>
 
@@ -223,7 +257,7 @@
           font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
           font-size="6.5" font-weight="800" fill="#fff" opacity="0.95" letter-spacing="0.3">NLedger</text>
       </svg>
-      <label class="toggle-wrap" title="Show closed logs">
+      <label class="toggle-wrap" title="Show closed projects">
         <span class="toggle-switch" class:on={showClosed} on:click={() => showClosed = !showClosed} role="switch" aria-checked={showClosed} tabindex="0" on:keydown={e => e.key === ' ' && (showClosed = !showClosed)}>
           <span class="toggle-thumb"></span>
         </span>
@@ -241,13 +275,6 @@
     </div>
     <nav class="menu-nav">
       <button class="btn-secondary-sm" on:click={openNewProject}>+ New Project</button>
-      {#if logTypes.length > 0}
-        {#each logTypes as lt}
-          <button class="btn-new" on:click={() => openNew(lt.id)}>+ {lt.label}</button>
-        {/each}
-      {:else}
-        <button class="btn-new" on:click={() => openNew()}>+ New Log</button>
-      {/if}
       <button class="theme-toggle" on:click={() => showSettings = true} title="Settings">⚙️</button>
     </nav>
   </header>
@@ -276,21 +303,21 @@
     <main class="main">
       <div class="cards">
         {#each visibleTopLevelProjects as project (project.id)}
-          {#if selProject !== null || !anyFilterActive || projectHasAnyLogs(project.id)}
-            <ProjectCard
-              {project}
-              subProjects={$projects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(project.id))}
-              allLogs={filtered}
-              allLogsTotal={$logs}
-              allProjects={$projects}
-              filtersActive={anyFilterActive}
-              showAllSubProjects={selProject !== null && !catOrCloseFilterActive}
-              {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
-              on:edit={openEdit}
-              on:editProject={openEditProject}
-              on:newLogInProject={openNewLogInProject}
-            />
-          {/if}
+          <ProjectCard
+            {project}
+            subProjects={$projects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(project.id))}
+            allLogs={matchingLogs}
+            allLogsTotal={$logs}
+            allProjects={$projects}
+            {visibleProjectIds}
+            {ancestorOnlyProjectIds}
+            {showClosed}
+            depth={0}
+            {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
+            on:edit={openEdit}
+            on:editProject={openEditProject}
+            on:newLogInProject={openNewLogInProject}
+          />
         {/each}
 
         {#each unassignedLogs as log (log.id)}
@@ -467,10 +494,8 @@
 
   .cards {
     flex: 1; overflow-y: auto;
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    grid-auto-rows: min-content;
-    align-content: start;
+    display: flex;
+    flex-direction: column;
     gap: var(--sp-card-gap); padding-right: 4px;
   }
 

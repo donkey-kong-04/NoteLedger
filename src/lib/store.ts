@@ -72,7 +72,7 @@ export async function deletePicklistValue(id: number) {
 }
 
 export async function createLog(log: Omit<Log, 'id' | 'start_date' | 'closed_date'>) {
-  await invoke<Log>('create_log', { log: { ...log, id: 0, start_date: '', closed_date: null, project_id: log.project_id ?? null, category1_ids: log.category1_ids ?? [], category2_ids: log.category2_ids ?? [], category3_ids: log.category3_ids ?? [], category4_ids: log.category4_ids ?? [] } });
+  await invoke<Log>('create_log', { log: { ...log, id: 0, start_date: '', closed_date: null, project_id: log.project_id, category1_ids: log.category1_ids ?? [], category2_ids: log.category2_ids ?? [], category3_ids: log.category3_ids ?? [], category4_ids: log.category4_ids ?? [] } });
   const fresh = await invoke<Log[]>('get_logs');
   logs.set(fresh);
 }

@@ -31,7 +31,7 @@
     due_date: null,
     is_closed: false,
     closed_date: null,
-    project_id: null,
+    project_id: allProjects[0]?.id ?? 0,
     category1_ids: [],
     category2_ids: [],
     category3_ids: [],
@@ -53,7 +53,7 @@
   }
 
   async function save() {
-    if (!draft.title.trim()) return;
+    if (!draft.title.trim() || !draft.project_id) return;
     await pendingAdd;
     draft.due_date = dueDateStr || null;
 if (isNew) {
@@ -145,15 +145,13 @@ if (isNew) {
     </div>
 
     <div class="field">
-      <label>Project</label>
+      <label>Project <span class="req">*</span></label>
       <select
-        value={draft.project_id == null ? '' : String(draft.project_id)}
+        value={String(draft.project_id)}
         on:change={e => {
-          const v = (e.target as HTMLSelectElement).value;
-          draft = { ...draft, project_id: v === '' ? null : Number(v) };
+          draft = { ...draft, project_id: Number((e.target as HTMLSelectElement).value) };
         }}
       >
-        <option value="">None</option>
         {#each allProjects as p}
           <option value={String(p.id)}>{p.title}</option>
         {/each}
@@ -208,7 +206,7 @@ if (isNew) {
     {/if}
     <div class="spacer"></div>
     <button class="btn-secondary" on:click={close}>Cancel</button>
-    <button class="btn-primary" on:click={save} disabled={!draft.title.trim()}>
+    <button class="btn-primary" on:click={save} disabled={!draft.title.trim() || !draft.project_id}>
       {isNew ? 'Create' : 'Save'}
     </button>
   </div>

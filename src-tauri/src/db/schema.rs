@@ -180,5 +180,65 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ")?;
     }
 
+    if version < 6 {
+        conn.execute_batch("PRAGMA foreign_keys = OFF;")?;
+
+        // Create "Others" project for any logs not yet assigned to a project
+        let orphans: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM logs WHERE project_id IS NULL",
+            [],
+            |r| r.get(0),
+        )?;
+        if orphans > 0 {
+            conn.execute(
+                "INSERT INTO projects (title) SELECT 'Others' WHERE NOT EXISTS (SELECT 1 FROM projects WHERE title = 'Others')",
+                [],
+            )?;
+            conn.execute(
+                "UPDATE logs SET project_id = (SELECT id FROM projects WHERE title = 'Others' LIMIT 1) WHERE project_id IS NULL",
+                [],
+            )?;
+        }
+
+        // Rebuild logs table with project_id NOT NULL
+        conn.execute_batch("
+            CREATE TABLE logs_new (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                type_id      INTEGER NOT NULL REFERENCES user_customizable_input(id),
+                title        TEXT    NOT NULL,
+                description  TEXT,
+                start_date   TEXT    NOT NULL,
+                due_date     TEXT,
+                is_closed    BOOLEAN NOT NULL DEFAULT 0,
+                closed_date  TEXT,
+                project_id   INTEGER NOT NULL REFERENCES projects(id)
+            );
+
+            INSERT INTO logs_new SELECT id, type_id, title, description, start_date, due_date,
+                                         is_closed, closed_date, project_id FROM logs;
+
+            DROP TABLE logs;
+            ALTER TABLE logs_new RENAME TO logs;
+
+            PRAGMA foreign_keys = ON;
+            PRAGMA user_version = 6;
+        ")?;
+    }
+
+    if version < 7 {
+        conn.execute_batch("
+            ALTER TABLE projects ADD COLUMN is_closed BOOLEAN NOT NULL DEFAULT 0;
+            PRAGMA user_version = 7;
+        ")?;
+    }
+
+    if version < 8 {
+        conn.execute_batch("
+            ALTER TABLE projects ADD COLUMN start_date TEXT;
+            ALTER TABLE projects ADD COLUMN end_date TEXT;
+            PRAGMA user_version = 8;
+        ")?;
+    }
+
     Ok(())
 }

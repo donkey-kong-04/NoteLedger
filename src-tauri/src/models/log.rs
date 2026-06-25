@@ -10,7 +10,7 @@ pub struct Log {
     pub due_date: Option<String>,
     pub is_closed: bool,
     pub closed_date: Option<String>,
-    pub project_id: Option<i64>,
+    pub project_id: i64,
     pub category1_ids: Vec<i64>,
     pub category2_ids: Vec<i64>,
     pub category3_ids: Vec<i64>,

@@ -20,6 +20,9 @@ export interface Project {
   title: string;
   description: string;
   parent_id: number | null;
+  is_closed: boolean;
+  start_date: string | null;
+  end_date: string | null;
   category1_ids: number[];
   category2_ids: number[];
   category3_ids: number[];
@@ -35,7 +38,7 @@ export interface Log {
   due_date: string | null;
   is_closed: boolean;
   closed_date: string | null;
-  project_id: number | null;
+  project_id: number;
   category1_ids: number[];
   category2_ids: number[];
   category3_ids: number[];

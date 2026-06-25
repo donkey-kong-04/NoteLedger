@@ -18,12 +18,15 @@ fn save_categories(conn: &Connection, table: &str, project_id: i64, ids: &[i64])
     Ok(())
 }
 
-fn load_project(conn: &Connection, id: i64, title: String, description: String, parent_id: Option<i64>) -> Result<Project> {
+fn load_project(conn: &Connection, id: i64, title: String, description: String, parent_id: Option<i64>, is_closed: bool, start_date: Option<String>, end_date: Option<String>) -> Result<Project> {
     Ok(Project {
         id,
         title,
         description,
         parent_id,
+        is_closed,
+        start_date,
+        end_date,
         category1_ids: load_category_ids(conn, "project_category_1", id)?,
         category2_ids: load_category_ids(conn, "project_category_2", id)?,
         category3_ids: load_category_ids(conn, "project_category_3", id)?,
@@ -33,20 +36,20 @@ fn load_project(conn: &Connection, id: i64, title: String, description: String, 
 
 pub fn list(conn: &Connection) -> Result<Vec<Project>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, description, parent_id FROM projects ORDER BY id"
+        "SELECT id, title, description, parent_id, is_closed, start_date, end_date FROM projects ORDER BY id"
     )?;
-    let rows: Result<Vec<(i64, String, String, Option<i64>)>> = stmt.query_map([], |r| {
-        Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<String>>(2)?.unwrap_or_default(), r.get(3)?))
+    let rows: Result<Vec<(i64, String, String, Option<i64>, bool, Option<String>, Option<String>)>> = stmt.query_map([], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<String>>(2)?.unwrap_or_default(), r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?))
     })?.collect();
     rows?.into_iter()
-        .map(|(id, title, desc, parent_id)| load_project(conn, id, title, desc, parent_id))
+        .map(|(id, title, desc, parent_id, is_closed, start_date, end_date)| load_project(conn, id, title, desc, parent_id, is_closed, start_date, end_date))
         .collect()
 }
 
 pub fn insert(conn: &Connection, project: &Project) -> Result<i64> {
     conn.execute(
-        "INSERT INTO projects (title, description, parent_id) VALUES (?1, ?2, ?3)",
-        params![project.title, project.description, project.parent_id],
+        "INSERT INTO projects (title, description, parent_id, is_closed, start_date, end_date) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![project.title, project.description, project.parent_id, project.is_closed, project.start_date, project.end_date],
     )?;
     let id = conn.last_insert_rowid();
     save_categories(conn, "project_category_1", id, &project.category1_ids)?;
@@ -65,8 +68,8 @@ pub fn update(conn: &Connection, project: &Project) -> Result<()> {
         }
     }
     conn.execute(
-        "UPDATE projects SET title=?1, description=?2, parent_id=?3 WHERE id=?4",
-        params![project.title, project.description, project.parent_id, project.id],
+        "UPDATE projects SET title=?1, description=?2, parent_id=?3, is_closed=?4, start_date=?5, end_date=?6 WHERE id=?7",
+        params![project.title, project.description, project.parent_id, project.is_closed, project.start_date, project.end_date, project.id],
     )?;
     save_categories(conn, "project_category_1", project.id, &project.category1_ids)?;
     save_categories(conn, "project_category_2", project.id, &project.category2_ids)?;

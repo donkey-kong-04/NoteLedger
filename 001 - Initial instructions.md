@@ -30,7 +30,7 @@ The application is developed using:
 # Data Model
 
 ### DB Migration versioning
-Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **5**.
+Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **8**.
 
 ### Table: `user_settings`
 Stores application-wide preferences.
@@ -66,11 +66,14 @@ A project groups logs together and can be nested under a parent project.
 | title | TEXT | No | — | Project name |
 | description | TEXT | Yes | NULL | Optional description |
 | parent_id | INTEGER | Yes | NULL | FK → projects.id (self-referencing, for nesting) |
+| is_closed | BOOLEAN | No | FALSE | Whether the project is closed |
+| start_date | TEXT | Yes | NULL | Optional start date (ISO 8601, no logic enforced) |
+| end_date | TEXT | Yes | NULL | Optional end date (ISO 8601, no logic enforced) |
 
 #### Notes
 - Application logic prevents circular parent references.
-- Deleting a project is blocked if it has sub-projects.
-- Deleting a project unlinks its logs (sets their `project_id` to NULL).
+- Deleting a project is blocked if it has sub-projects or logs.
+- Closed projects are hidden by default; shown when "Show closed" toggle is on.
 - Projects can have category values assigned (see junction tables below).
 
 ### Tables: `project_category_1`, `project_category_2`, `project_category_3`, `project_category_4`
@@ -96,7 +99,10 @@ A single log entry.
 | due_date | DATE | Yes | NULL | Optional due date |
 | is_closed | BOOLEAN | No | FALSE | Whether the log is closed |
 | closed_date | DATE | Yes | NULL | Auto-set when closed; reset to NULL when re-opened |
-| project_id | INTEGER | Yes | NULL | FK → projects.id |
+| project_id | INTEGER | No | — | FK → projects.id (required — every log must belong to a project) |
+
+#### Notes
+- A log must always be assigned to a project. An "Others" project is created automatically (migration v6) to hold any pre-existing orphan logs.
 
 ### Tables: `log_category_1`, `log_category_2`, `log_category_3`, `log_category_4`
 Junction tables for many-to-many category assignments on logs.
@@ -116,33 +122,31 @@ The main screen is divided into four zones:
 
 - **Menu bar (top)**: split into two groups.
   - **Left group**: Book icon logo, "Show closed" toggle, project filter dropdown, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
-  - **Right group** (`nav`): "+ New Project" button, per-log-type "New" buttons (e.g. "+ Task", "+ Decision"), settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
+  - **Right group** (`nav`): "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
 - **Top area (main column)**: Category 3 and Category 4 filter badges, side by side.
 - **Left sidebar (230px)**: Category 1 and Category 2 filter badges, arranged horizontally with wrapping. Category 1 is at the top, directly below the menu bar.
-- **Main area**: Log and project cards in a 3-column grid.
+- **Main area**: Project cards in a vertical tree list (full width).
 
 All spacing in the menu bar, sidebar, top category bar, main grid, log/project cards, settings modal, and log/project editors is controlled by the **Layout density** setting (see Settings Panel).
 
-### Closed Logs Toggle
+### Show Closed Toggle
 
 A toggle switch in the top-left of the menu bar (next to the logo) labelled **"Show closed"**:
-- **Off (default)**: closed logs are hidden everywhere — in the main view and inside project cards.
-- **On**: closed logs are visible. Project card count badge shows `open / total` (e.g. `3 / 5`). When all logs are open, just shows the count.
+- **Off (default)**: closed **projects** are hidden. Closed **logs** are always shown inside visible projects (greyed out at 60% opacity).
+- **On**: closed projects are also visible (rendered at 55% opacity). Closed logs remain visible in all cases.
 
 ### Project Filter Dropdown
 
 A `<select>` in the menu bar listing all projects (indented to show hierarchy). Selecting a project:
-- Shows only logs belonging to that project or any of its sub-projects (recursive).
-- Shows all sub-projects under the selected project's root, even if empty.
+- Shows the selected project and all its descendants.
+- Ancestor projects (parent chain up to root) are shown as context-only — their header is visible but their log table is hidden.
+- When no category filter is active, **all descendants are shown** including closed ones, regardless of whether they have logs.
+- When category filters are active, descendants are only shown if their subtree contains matching logs (closed ones still respect the "Show closed" toggle).
 - Selecting "All projects" resets the filter.
 
 ### Clear Filters Button
 
 A **"✕ Clear filters"** button sits in the menu bar's left group, next to the project filter dropdown. It is **always visible** (not conditional) — clicking it resets all filters (categories, project, show-closed) at once. Always-visible by design: users tend to click it by default just to reassure themselves nothing is filtered.
-
-### New Log Buttons
-
-When at least one log type is configured, the generic "+ New Log" button is replaced by individual buttons for each log type (e.g. "+ Task", "+ Decision", "+ Event").
 
 ### Settings Panel (⚙️)
 
@@ -164,11 +168,12 @@ All four categories are always visible, acting as quick filters.
 - **Quick-add input**: "+ Add" button after the last badge; pressing Enter creates and selects the new value inline.
 
 **Filter logic:**
-- Selecting multiple values within the **same category** → **AND** (log+project combined must cover all selected values)
+- Selecting multiple values within the **same category** → **AND** (the log+project combined must carry ALL selected values)
 - Selecting values across **different categories** → **AND** (log must match all active category filters)
 - A log's **effective category set** = its own categories **∪** all ancestor project categories (recursive)
-- When filters are active, project and sub-project cards that have no matching logs are **hidden automatically** (recursive check through the full subtree)
-- Sub-projects are only shown without logs when a specific project is selected in the dropdown **and** no category/close filters are active
+- When category filters are active, projects whose entire subtree has no matching logs are **hidden automatically**
+- When "Show closed" is off, closed projects are hidden regardless of other filters
+- When a project is selected in the dropdown with no category filter active, all descendant projects are shown (including closed ones)
 
 | Category | Position | Arrangement | Color |
 |---|---|---|---|
@@ -181,25 +186,20 @@ Badge style:
 - **Unselected**: colored text + border, background matches theme
 - **Selected**: colored background, text auto-contrasts (black or white)
 
-### Log Card (View Mode)
+### Project Tree (Main Area)
 
-Each log card shows, top to bottom:
-- **Title** (dimmed if closed)
-- **Deadline date** and **Log type** label on the same line, packed together on the left (date first, then type — not spread across the row). Deadline color: 🔴 past, 🟡 within 7 days, 🟢 beyond 7 days
-- **Description** (rendered as rich text, clamped to 3 lines by default)
-- **Category badges** at the bottom (all assigned values across all 4 categories)
-- **CLOSED** badge if the log is closed
-- **On hover**: description expands in place to show the full text (smooth transition, card grows downward only via `align-self: start`)
-- **Links in description**: clickable — opens in the system default browser via Tauri opener plugin. Clicking elsewhere in the description (not a link) still opens the Log Editor like the rest of the card.
+Projects are displayed as a vertical tree list (not a grid). Each level of nesting is indented 24px to the right relative to its parent, giving a visual hierarchy without drawing tree lines.
 
-### Project Cards
+Each **project card** contains:
+- **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **+** button
+- **Log table** (if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted by deadline descending (no deadline last). Closed log rows are greyed out. Hovering a row expands the Description cell to show the full text.
+- Sub-projects rendered immediately below the log table, at the next indent level.
 
-Projects appear as collapsible cards spanning the full width of the main grid. Inside each project card:
-- **Header**: collapse toggle, project title (clickable → opens Project Editor), **assigned category badges** (shown inline next to the title, wrapping to next line if needed), log count badge, **+** button to add a log to this project
-- Own logs are shown first in a 3-column grid
-- Sub-projects are shown below own logs, each spanning full width (recursive)
-- A count badge shows open logs (or `open / total` when closed logs exist and are shown)
-- When filters are active, projects and sub-projects with no matching logs are hidden
+The **+** button on each project opens a **type picker** dropdown (purple background, white text). Selecting a log type opens the Log Editor pre-filled with that type and the project. The dropdown is dismissed by clicking outside it.
+
+The log count badge always shows `open / total` (e.g. `2 / 5`). It is always visible next to the `+` button.
+
+Closed projects render at 55% opacity. The "Closed" pill appears in the header.
 
 ### Log Editor (slide-in panel, 780px wide)
 
@@ -209,16 +209,17 @@ Fields:
 - Description (rich text — see Rich Text Editor section)
 - Due Date
 - Status (open/closed toggle)
-- Project (dropdown — assigns the log to a project)
+- Project (dropdown — required; every log must belong to a project)
 - Categories — 2×2 grid of badge toggles, one group per category; multiple values selectable per category; values sorted alphabetically; **"+ Add" button in each group** to create new category values on the fly (auto-selected after creation, race-condition safe via `pendingAdd` promise tracking)
 
 ### Project Editor (slide-in panel, 480px wide)
 
 Fields:
-- Title, Description
-- Parent Project (dropdown with cycle detection — cannot create circular nesting)
-- **Default Categories** — 2×2 grid of badge toggles (same as Log Editor); categories assigned here are inherited by all logs in this project and descendant sub-projects; includes "**+ Add**" inline creation per category
-- Delete (blocked if sub-projects exist; unlinks logs on delete)
+- Title (required), Description
+- Start Date, End Date (optional, no logic enforced — same row)
+- Parent Project + Closed checkbox (same row; parent takes 3× width)
+- **Default Categories** — 2×2 grid of badge toggles; categories assigned here are inherited by all logs in this project and descendant sub-projects; includes "**+ Add**" inline creation per category
+- Delete (blocked if sub-projects exist)
 
 ### Rich Text Editor
 
