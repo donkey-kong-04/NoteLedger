@@ -50,6 +50,7 @@
     const key = `category${slot}_ids` as const;
     const cur = draft[key];
     draft = { ...draft, [key]: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] };
+    addDraft[slot] = '';
   }
 
   async function save() {
@@ -88,6 +89,7 @@ if (isNew) {
   let showAddInput: Record<number, boolean> = { 1: false, 2: false, 3: false, 4: false };
   let addDraft: Record<number, string> = { 1: '', 2: '', 3: '', 4: '' };
   let pendingAdd: Promise<void> = Promise.resolve();
+  let isClicking: Record<number, boolean> = { 1: false, 2: false, 3: false, 4: false };
 
   function filteredVals(vals: typeof cats[0]['vals'], q: string) {
     const query = q.trim().toLowerCase();
@@ -175,15 +177,19 @@ if (isNew) {
         {@const color = CAT_COLORS[`category_${cat.slot}`]?.hex ?? '#888'}
         <div class="cat-field">
           <div class="cat-field-label" style="color:{color}">{cat.label}</div>
-          <div class="cat-badges">
+          <!-- svelte-ignore a11y-no-static-element-interactions -->
+          <div class="cat-badges"
+            on:mousedown={() => { isClicking[cat.slot] = true; }}
+            on:mouseup={() => { isClicking[cat.slot] = false; }}
+          >
             {#if showAddInput[cat.slot]}
               <input
                 class="inline-add-input"
                 style="border-color:{color}; outline-color:{color}"
                 bind:value={addDraft[cat.slot]}
                 placeholder="Search or add…"
-                on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addAndSelect(cat.slot, cat.vals); } if (e.key === 'Escape' || e.key === 'Tab') { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; } }}
-                on:blur={() => setTimeout(() => { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; }, 150)}
+                on:blur={() => { if (!isClicking[cat.slot]) { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; } }}
+                on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addAndSelect(cat.slot, cat.vals); } if (e.key === 'Escape' || e.key === 'Tab') { isClicking[cat.slot] = false; addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; } }}
                 autofocus
               />
             {:else}

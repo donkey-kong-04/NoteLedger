@@ -20,9 +20,12 @@
   let searchText = '';
   let showSearch = false;
   let inputEl: HTMLInputElement;
+  let isClicking = false;
 
-  $: query = searchText.trim().toLowerCase();
-  $: filteredValues = query ? values.filter(v => v.label.toLowerCase().includes(query)) : values;
+  function filterValues(vals: PicklistValue[], q: string) {
+    const query = q.trim().toLowerCase();
+    return query ? vals.filter(v => v.label.toLowerCase().includes(query)) : vals;
+  }
 
   function toggleValue(id: number) {
     if (selected.includes(id)) {
@@ -30,6 +33,7 @@
     } else {
       selected = [...selected, id];
     }
+    searchText = '';
   }
 
   let lastError = '';
@@ -90,13 +94,13 @@
   }
 
   function closeSearch() {
+    if (isClicking) return;
     showSearch = false;
     searchText = '';
   }
 
   function openSearch() {
     showSearch = true;
-    // focus handled by autofocus / bind:this
   }
 
   function commitLabel() {
@@ -127,18 +131,23 @@
     <span class="err">{lastError}</span>
   {/if}
 
-  <div class="badges" class:wrap={layout === 'horizontal'}>
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <div class="badges" class:wrap={layout === 'horizontal'}
+    on:mousedown={() => { isClicking = true; }}
+    on:mouseup={() => { isClicking = false; }}
+  >
     <!-- Search/add input always at the beginning -->
     {#if showSearch}
       <input
         class="search-input"
+        style="border-color: {color}; outline-color: {color}"
         bind:value={searchText}
         bind:this={inputEl}
         placeholder="Search or add…"
-        on:blur={() => setTimeout(closeSearch, 150)}
+        on:blur={closeSearch}
         on:keydown={e => {
           if (e.key === 'Enter') { e.preventDefault(); handleEnter(); }
-          if (e.key === 'Escape') closeSearch();
+          if (e.key === 'Escape') { isClicking = false; closeSearch(); }
         }}
         autofocus
       />
@@ -146,7 +155,7 @@
       <button class="add-btn" on:click={openSearch}>Add or search</button>
     {/if}
 
-    {#each filteredValues as val (val.id)}
+    {#each filterValues(values, searchText) as val (val.id)}
       <div class="badge-row">
         {#if editingId === val.id}
           <input

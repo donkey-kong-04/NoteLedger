@@ -165,7 +165,7 @@ All four categories are always visible, acting as quick filters.
 - **Label**: editable in place — clicking allows the user to rename the category.
 - **Values**: shown as clickable badges arranged **horizontally with wrapping**; clicking filters the main view. Values are sorted alphabetically.
 - **Edit/Delete buttons**: visible only when a badge is **selected** (not on hover) — ✎ edit (inline rename) and × delete (blocked if any log uses the value).
-- **Add or search**: an **"Add or search"** button appears **before** the badges. Clicking it opens an inline input that simultaneously filters visible badges (case-insensitive substring match as you type) and allows creating new values. Pressing Enter with an exact match toggles that value; with no match, creates a new value and auto-selects it. Escape or clicking away closes the input. The same control appears in the Log Editor and Project Editor category sections.
+- **Add or search**: an **"Add or search"** button appears **before** the badges. Clicking it opens an inline search input (border color matches the category color) that simultaneously filters visible badges (case-insensitive substring match as you type) and allows creating new values. Pressing Enter with an exact match toggles that value; with no match, creates a new value and auto-selects it. Clicking a badge while the search is open selects/deselects it and clears the search text. Escape or clicking away closes the input. The same control appears in the Log Editor and Project Editor category sections.
 
 **Filter logic:**
 - Selecting multiple values within the **same category** → **AND** (the log+project combined must carry ALL selected values)
