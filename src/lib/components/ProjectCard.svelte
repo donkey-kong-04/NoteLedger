@@ -2,7 +2,8 @@
   import Badge from './Badge.svelte';
   import { createEventDispatcher } from 'svelte';
   import { deadlineColor, contrastText, handleLinkClick } from '../types';
-  import type { Log, Project, PicklistValue } from '../types';
+  import type { Log, Project, PicklistValue, ProjectLink } from '../types';
+  import { openLink } from '../types';
 
   export let project: Project;
   export let subProjects: Project[];
@@ -13,6 +14,7 @@
   export let ancestorOnlyProjectIds: Set<number> = new Set();
   export let showClosed: boolean = false;
   export let depth: number = 0;
+  export let allLinks: ProjectLink[] = [];
   export let logTypes: PicklistValue[];
   export let cat1Vals: PicklistValue[];
   export let cat2Vals: PicklistValue[];
@@ -69,6 +71,8 @@
       ...log.category4_ids.map(id => ({ val: cat4Vals.find(v => v.id === id), type: 'category_4' })),
     ].filter(x => x.val) as { val: PicklistValue; type: string }[];
   }
+
+  $: ownLinks = allLinks.filter(l => l.project_id === project.id);
 </script>
 
 <!-- Project header row -->
@@ -95,6 +99,7 @@
     {/if}
     <span class="count-badge">{countLabel}</span>
     <button class="sub-btn" on:click={() => dispatch('newSubProject', project)} title="New sub-project">＋ Sub-project</button>
+    <button class="sub-btn" on:click={() => dispatch('newLink', project)} title="Add link">＋ Link</button>
     <div class="add-wrap">
       <button class="add-btn" on:click={() => showTypePicker = !showTypePicker} title="Add log">+</button>
       {#if showTypePicker}
@@ -109,63 +114,86 @@
   </div>
 
   {#if !collapsed}
-    <!-- Log table — hidden for ancestor-context projects -->
-    {#if ownLogs.length > 0 && !ancestorOnlyProjectIds.has(project.id)}
-      <div class="log-table-wrap">
-        <table class="log-table">
-          <thead>
-            <tr>
-              <th class="col-title">Title</th>
-              <th class="col-deadline">Deadline</th>
-              <th class="col-desc">Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each ownLogs as log (log.id)}
-              {@const dl = log.due_date ? deadlineColor(log.due_date) : null}
-              {@const dlText = dl ? contrastText(dl) : '#fff'}
-              {@const badges = getCatBadges(log)}
-              {@const type = getLogType(log)}
-              <tr
-                class="log-row"
-                class:log-closed={log.is_closed}
-                on:click={() => dispatch('edit', log)}
-                on:mouseenter={() => hoveredLogId = log.id}
-                on:mouseleave={() => hoveredLogId = null}
-                role="button" tabindex="0"
-                on:keydown={e => e.key === 'Enter' && dispatch('edit', log)}
-              >
-                <td class="col-title">
-                  <span class="log-title">{log.title}</span>
-                  {#if type}
-                    <span class="log-type">{type.label}</span>
-                  {/if}
-                  {#if badges.length > 0}
-                    <div class="log-badges">
-                      {#each badges as badge}
-                        <Badge label={badge.val.label} catType={badge.type} selected={true} clickable={false} size="sm" />
-                      {/each}
-                    </div>
-                  {/if}
-                </td>
-                <td class="col-deadline">
-                  {#if log.due_date}
-                    <span class="deadline-pill" style="background:{dl}; color:{dlText}">{log.due_date}</span>
-                  {/if}
-                </td>
-                <td class="col-desc">
-                  {#if log.description}
-                    <div class="log-desc" class:expanded={hoveredLogId === log.id} on:click|stopPropagation={handleLinkClick}>{@html log.description}</div>
-                  {/if}
-                </td>
-              </tr>
+    <!-- Body: log table (80%) + links panel (20%) -->
+    {#if (ownLogs.length > 0 || ownLinks.length > 0) && !ancestorOnlyProjectIds.has(project.id)}
+      <div class="card-body" class:has-links={ownLinks.length > 0}>
+        <!-- Log table — hidden for ancestor-context projects -->
+        {#if ownLogs.length > 0}
+          <div class="log-table-wrap">
+            <table class="log-table">
+              <thead>
+                <tr>
+                  <th class="col-title">Title</th>
+                  <th class="col-deadline">Deadline</th>
+                  <th class="col-desc">Description</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each ownLogs as log (log.id)}
+                  {@const dl = log.due_date && !log.is_closed ? deadlineColor(log.due_date) : null}
+                  {@const dlText = dl ? contrastText(dl) : '#fff'}
+                  {@const badges = getCatBadges(log)}
+                  {@const type = getLogType(log)}
+                  <tr
+                    class="log-row"
+                    class:log-closed={log.is_closed}
+                    on:click={() => dispatch('edit', log)}
+                    on:mouseenter={() => hoveredLogId = log.id}
+                    on:mouseleave={() => hoveredLogId = null}
+                    role="button" tabindex="0"
+                    on:keydown={e => e.key === 'Enter' && dispatch('edit', log)}
+                  >
+                    <td class="col-title">
+                      <span class="log-title">{log.title}</span>
+                      {#if type}
+                        <span class="log-type">{type.label}</span>
+                      {/if}
+                      {#if badges.length > 0}
+                        <div class="log-badges">
+                          {#each badges as badge}
+                            <Badge label={badge.val.label} catType={badge.type} selected={true} clickable={false} size="sm" />
+                          {/each}
+                        </div>
+                      {/if}
+                    </td>
+                    <td class="col-deadline">
+                      {#if log.due_date}
+                        <span class="deadline-pill" style="background:{dl}; color:{dlText}">{log.due_date}</span>
+                      {/if}
+                    </td>
+                    <td class="col-desc">
+                      {#if log.description}
+                        <div class="log-desc" class:expanded={hoveredLogId === log.id} on:click|stopPropagation={handleLinkClick}>{@html log.description}</div>
+                      {/if}
+                    </td>
+                  </tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        {/if}
+
+        <!-- Links panel -->
+        {#if ownLinks.length > 0}
+          <div class="links-panel">
+            {#each ownLinks as link (link.id)}
+              <div class="link-row">
+                <button class="link-card" on:click|stopPropagation={() => openLink(link.url).catch(e => console.error('openLink failed:', e, link.url))}>
+                  <svg class="link-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6.5 9.5a3.5 3.5 0 0 0 5 0l2-2a3.536 3.536 0 0 0-5-5L7.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <path d="M9.5 6.5a3.5 3.5 0 0 0-5 0l-2 2a3.536 3.536 0 0 0 5 5l1-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  </svg>
+                  <span class="link-card-label">{link.label}</span>
+                </button>
+                <button class="link-action" on:click|stopPropagation={() => dispatch('editLink', link)} title="Edit">✎</button>
+              </div>
             {/each}
-          </tbody>
-        </table>
+          </div>
+        {/if}
       </div>
     {/if}
 
-    {#if ownLogs.length === 0 && visibleSubProjects.length === 0 && !ancestorOnlyProjectIds.has(project.id)}
+    {#if ownLogs.length === 0 && ownLinks.length === 0 && visibleSubProjects.length === 0 && !ancestorOnlyProjectIds.has(project.id)}
       {#if ownLogsTotal.length > 0}
         <p class="empty">No logs matching the filters.</p>
       {:else}
@@ -181,7 +209,7 @@
     <svelte:self
       project={sub}
       subProjects={allProjects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(sub.id))}
-      {allLogs} {allLogsTotal} {allProjects}
+      {allLogs} {allLogsTotal} {allProjects} {allLinks}
       {visibleProjectIds} {ancestorOnlyProjectIds} {showClosed}
       depth={depth + 1}
       {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
@@ -189,6 +217,8 @@
       on:editProject
       on:newLogInProject
       on:newSubProject
+      on:newLink
+      on:editLink
     />
   {/each}
 {/if}
@@ -357,4 +387,65 @@
     margin: 0; padding: 8px 10px;
     box-sizing: border-box;
   }
+
+  /* 80/20 body layout */
+  .card-body {
+    display: flex;
+    align-items: stretch;
+  }
+  .card-body .log-table-wrap { flex: 1; min-width: 0; }
+  .card-body.has-links .log-table-wrap { flex: 0 0 80%; }
+
+  /* Links panel */
+  .links-panel {
+    flex: 0 0 20%;
+    border-left: 1px solid var(--border);
+    padding: 6px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  .link-row {
+    display: flex; align-items: center; gap: 4px;
+    min-width: 0;
+  }
+
+  .link-card {
+    flex: 1; min-width: 0;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 7px 3px 5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.12s, border-color 0.12s;
+    max-width: 100%;
+  }
+  .link-card:hover {
+    background: var(--surface-2);
+    border-color: var(--accent);
+  }
+
+  .link-icon {
+    width: 13px; height: 13px;
+    flex-shrink: 0;
+    color: var(--accent);
+  }
+
+  .link-card-label {
+    font-size: 12px; font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .link-action {
+    flex-shrink: 0;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 13px; padding: 0 2px;
+  }
+  .link-action:hover { color: var(--text); }
 </style>

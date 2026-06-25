@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import { invoke } from '@tauri-apps/api/core';
-import type { UserSettings, PicklistValue, Log, Project } from './types';
+import type { UserSettings, PicklistValue, Log, Project, ProjectLink } from './types';
 
 export const settings = writable<UserSettings>({
   category1_label: 'Category 1',
@@ -14,18 +14,21 @@ export const settings = writable<UserSettings>({
 export const picklists = writable<PicklistValue[]>([]);
 export const projects = writable<Project[]>([]);
 export const logs = writable<Log[]>([]);
+export const projectLinks = writable<ProjectLink[]>([]);
 
 export async function loadAll() {
-  const [s, p, pr, l] = await Promise.all([
+  const [s, p, pr, l, pl] = await Promise.all([
     invoke<UserSettings>('get_settings'),
     invoke<PicklistValue[]>('get_all_picklists'),
     invoke<Project[]>('get_projects'),
     invoke<Log[]>('get_logs'),
+    invoke<ProjectLink[]>('get_project_links'),
   ]);
   settings.set(s);
   picklists.set(p);
   projects.set(pr);
   logs.set(l);
+  projectLinks.set(pl);
 }
 
 export async function createProject(project: Omit<Project, 'id'>) {
@@ -69,6 +72,22 @@ export async function updatePicklistValue(id: number, label: string) {
 export async function deletePicklistValue(id: number) {
   await invoke('delete_picklist_value', { id });
   picklists.update(p => p.filter(v => v.id !== id));
+}
+
+export async function createProjectLink(link: Omit<ProjectLink, 'id'>) {
+  const created = await invoke<ProjectLink>('create_project_link', { link: { ...link, id: 0 } });
+  projectLinks.update(l => [...l, created]);
+  return created;
+}
+
+export async function updateProjectLink(link: ProjectLink) {
+  await invoke('update_project_link', { link });
+  projectLinks.update(l => l.map(x => x.id === link.id ? link : x));
+}
+
+export async function deleteProjectLink(id: number) {
+  await invoke('delete_project_link', { id });
+  projectLinks.update(l => l.filter(x => x.id !== id));
 }
 
 export async function createLog(log: Omit<Log, 'id' | 'start_date' | 'closed_date'>) {

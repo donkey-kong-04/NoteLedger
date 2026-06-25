@@ -3,6 +3,7 @@ pub mod settings_repo;
 pub mod picklist_repo;
 pub mod log_repo;
 pub mod project_repo;
+pub mod project_link_repo;
 
 use rusqlite::{Connection, Result};
 

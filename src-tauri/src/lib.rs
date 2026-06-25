@@ -10,6 +10,7 @@ use models::settings::UserSettings;
 use models::picklist::PicklistValue;
 use models::log::Log;
 use models::project::Project;
+use models::project_link::ProjectLink;
 
 pub struct AppState(Mutex<Connection>);
 
@@ -82,6 +83,34 @@ fn delete_project(state: State<AppState>, id: i64) -> Result<(), String> {
     db::project_repo::delete(&conn, id).map_err(|e| e.to_string())
 }
 
+// ── Project Links ─────────────────────────────────────────────────────────────
+
+#[tauri::command]
+fn get_project_links(state: State<AppState>) -> Result<Vec<ProjectLink>, String> {
+    let conn = state.0.lock().unwrap();
+    db::project_link_repo::list_all(&conn).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_project_link(state: State<AppState>, mut link: ProjectLink) -> Result<ProjectLink, String> {
+    let conn = state.0.lock().unwrap();
+    let id = db::project_link_repo::insert(&conn, &link).map_err(|e| e.to_string())?;
+    link.id = id;
+    Ok(link)
+}
+
+#[tauri::command]
+fn update_project_link(state: State<AppState>, link: ProjectLink) -> Result<(), String> {
+    let conn = state.0.lock().unwrap();
+    db::project_link_repo::update(&conn, &link).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_project_link(state: State<AppState>, id: i64) -> Result<(), String> {
+    let conn = state.0.lock().unwrap();
+    db::project_link_repo::delete(&conn, id).map_err(|e| e.to_string())
+}
+
 // ── Logs ──────────────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -137,6 +166,7 @@ pub fn run() {
             get_settings, save_settings,
             get_all_picklists, create_picklist_value, update_picklist_value, delete_picklist_value,
             get_projects, create_project, update_project, delete_project,
+            get_project_links, create_project_link, update_project_link, delete_project_link,
             get_logs, create_log, update_log, delete_log,
         ])
         .run(tauri::generate_context!())

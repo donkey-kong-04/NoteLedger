@@ -29,6 +29,13 @@ export interface Project {
   category4_ids: number[];
 }
 
+export interface ProjectLink {
+  id: number;
+  project_id: number;
+  label: string;
+  url: string;
+}
+
 export interface Log {
   id: number;
   type_id: number;
@@ -80,9 +87,13 @@ export function deadlineColor(due: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const dueDate = new Date(due);
-  const weekEnd = new Date(today);
-  weekEnd.setDate(weekEnd.getDate() + 7);
-  if (dueDate < today) return '#ef4444';
-  if (dueDate <= weekEnd) return '#f59e0b';
+  // End of this calendar week (Sunday), or today if today is Sunday
+  const endOfThisWeek = new Date(today);
+  endOfThisWeek.setDate(today.getDate() + (7 - today.getDay()) % 7);
+  // End of next calendar week (the Sunday after)
+  const endOfNextWeek = new Date(endOfThisWeek);
+  endOfNextWeek.setDate(endOfThisWeek.getDate() + 7);
+  if (dueDate <= endOfThisWeek) return '#ef4444';
+  if (dueDate <= endOfNextWeek) return '#f59e0b';
   return '#22c55e';
 }

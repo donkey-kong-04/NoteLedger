@@ -73,7 +73,16 @@
   function onKeydown(e: KeyboardEvent) {
     if (e.key === 'Tab') {
       e.preventDefault();
-      document.execCommand('insertText', false, '    ');
+      const sel = window.getSelection();
+      const node = sel?.anchorNode;
+      const inList = !!(node && (node as Element).closest?.('li, ul, ol') ||
+        (node?.parentElement?.closest('li, ul, ol')));
+      if (inList) {
+        document.execCommand(e.shiftKey ? 'outdent' : 'indent');
+      } else if (!e.shiftKey) {
+        document.execCommand('insertText', false, '    ');
+      }
+      syncValue();
     }
   }
 

@@ -30,7 +30,7 @@ The application is developed using:
 # Data Model
 
 ### DB Migration versioning
-Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **8**.
+Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **9**.
 
 ### Table: `user_settings`
 Stores application-wide preferences.
@@ -86,6 +86,18 @@ Junction tables for many-to-many category assignments on projects.
 
 Categories assigned to a project are inherited by all logs in that project and all descendant sub-projects (recursive ancestor traversal at filter time).
 
+### Table: `project_links`
+Labelled URLs attached to a project.
+
+| Field | Type | Nullable | Default | Description |
+|---|---|---|---|---|
+| id | INTEGER | No | autoincrement | Primary key |
+| project_id | INTEGER | No | — | FK → projects.id (ON DELETE CASCADE) |
+| label | TEXT | No | — | Display label shown on the link card |
+| url | TEXT | No | — | Full URL (e.g. `https://…`) |
+
+Links are displayed in the project card's 20% links panel (visible only when at least one link exists). Clicking opens the URL in the system default browser.
+
 ### Table: `logs`
 A single log entry.
 
@@ -122,7 +134,7 @@ The main screen is divided into four zones:
 
 - **Menu bar (top)**: split into two groups.
   - **Left group**: Book icon logo, "Show closed" toggle, project filter dropdown, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
-  - **Right group** (`nav`): "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
+  - **Right group** (`nav`): **"Deadlines"** link (navigates to the Deadlines page), "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
 - **Top area (main column)**: Category 3 and Category 4 filter badges, side by side.
 - **Left sidebar (230px)**: Category 1 and Category 2 filter badges, arranged horizontally with wrapping. Category 1 is at the top, directly below the menu bar.
 - **Main area**: Project cards in a vertical tree list (full width).
@@ -191,11 +203,13 @@ Badge style:
 Projects are displayed as a vertical tree list (not a grid). Each level of nesting is indented 24px to the right relative to its parent, giving a visual hierarchy without drawing tree lines.
 
 Each **project card** contains:
-- **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **+** button
-- **Log table** (if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted by deadline descending (no deadline last). Closed log rows are greyed out. Hovering a row expands the Description cell to show the full text.
-- Sub-projects rendered immediately below the log table, at the next indent level.
+- **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button
+- **Body** (80% / 20% split when links exist):
+  - **Log table** (80%, if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted by deadline descending (no deadline last). Closed log rows are greyed out. Hovering a row expands the Description cell to show the full text.
+  - **Links panel** (20%, if links exist): list of project links displayed as Confluence-style cards (chain icon + label). Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
+- Sub-projects rendered immediately below the body, at the next indent level.
 
-The **＋ Sub-project** button opens the Project Editor pre-filled with the current project as the parent. The **+** button on each project opens a **type picker** dropdown (purple background, white text). Selecting a log type opens the Log Editor pre-filled with that type and the project. The dropdown is dismissed by clicking outside it.
+The **＋ Sub-project** button opens the Project Editor pre-filled with the current project as the parent. The **＋ Link** button opens the **Link Editor** (slide-in panel, 400px wide) to add a labelled URL to the project. The **+** button opens a **type picker** dropdown (purple background, white text). Selecting a log type opens the Log Editor pre-filled with that type and the project.
 
 The log count badge always shows `open / total` (e.g. `2 / 5`). It is always visible next to the `+` button.
 
@@ -204,6 +218,36 @@ Closed projects render at 55% opacity. The "Closed" pill appears in the header.
 When a project has no logs to display:
 - **No filters active**: shows *"No logs yet — click + to add one."*
 - **Filters active and the project has logs but none match**: shows *"No logs matching the filters."*
+
+### Link Editor (slide-in panel, 400px wide)
+
+Fields:
+- Label (required) — display name for the link
+- URL (required) — the full URL (e.g. `https://…`)
+
+The project name is shown as a subtitle below the panel title. Supports create, edit, and delete. Links open in the system default browser via `opener:allow-default-urls`.
+
+### Deadlines Page
+
+Accessible via the **"Deadlines"** button in the top-right menu bar. Shows a read-only table of all **open logs** (closed logs excluded), with columns:
+
+| Column | Notes |
+|---|---|
+| Project | Full project path (ancestors joined with `›`) |
+| Log | Log title |
+| Deadline | Color-coded pill (see color rules below); blank if no due date |
+| Description | Full rich text, not truncated |
+
+Sorted by due date descending (no due date → end of list). Descriptions are always fully expanded — no hover needed. A **← Back** link returns to the main view.
+
+**Deadline color rules** (applied in both the project card log table and the Deadlines page; closed logs are never color-coded):
+
+| Color | Condition |
+|---|---|
+| 🔴 Red | Due date is this calendar week (up to and including this Sunday) or earlier |
+| 🟡 Yellow | Due date falls in next calendar week (Mon–Sun) |
+| 🟢 Green | Due date is beyond next week |
+| — | No due date, or log is closed |
 
 ### Log Editor (slide-in panel, 780px wide)
 
@@ -235,7 +279,8 @@ Built on `contenteditable` with `document.execCommand`. Toolbar:
 
 Additional behaviors:
 - **Pasting a bare URL** (`https://...`) automatically converts it to a clickable `<a>` link
-- **Clicking a link** (Ctrl/Cmd+click in the editor, or click in the log card description) opens it in the system default browser
+- **Clicking a link** (Ctrl/Cmd+click in the editor, or click in the log card description) opens it in the system default browser via `opener:allow-default-urls`
+- **Tab** inside a list item indents it (creates a nested sub-list); **Shift+Tab** outdents it. Outside a list, Tab inserts 4 spaces.
 
 ### Links
 

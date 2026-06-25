@@ -240,5 +240,17 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         ")?;
     }
 
+    if version < 9 {
+        conn.execute_batch("
+            CREATE TABLE IF NOT EXISTS project_links (
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                label     TEXT NOT NULL,
+                url       TEXT NOT NULL
+            );
+            PRAGMA user_version = 9;
+        ")?;
+    }
+
     Ok(())
 }

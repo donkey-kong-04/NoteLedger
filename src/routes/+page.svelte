@@ -6,9 +6,10 @@
   import ProjectCard from '$lib/components/ProjectCard.svelte';
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
+  import LinkEditor from '$lib/components/LinkEditor.svelte';
   import SettingsPanel from '$lib/components/SettingsPanel.svelte';
-  import { settings, picklists, projects, logs, loadAll, saveSettings } from '$lib/store';
-  import type { Log, Project } from '$lib/types';
+  import { settings, picklists, projects, logs, projectLinks, loadAll, saveSettings } from '$lib/store';
+  import type { Log, Project, ProjectLink } from '$lib/types';
 
   const DENSITY_VARS: Record<string, Record<string, string>> = {
     compact: {
@@ -51,6 +52,10 @@
   let showSettings = false;
   let editorProject: Project | null = null;
   let showProjectEditor = false;
+  let editorLink: ProjectLink | null = null;
+  let editorLinkProjectId: number = 0;
+  let editorLinkProjectTitle: string = '';
+  let showLinkEditor = false;
 
   // Filter state
   let showClosed = false;
@@ -232,6 +237,23 @@
 
   function closeProjectEditor() { showProjectEditor = false; editorProject = null; }
 
+  function openNewLink(e: CustomEvent<Project>) {
+    editorLink = null;
+    editorLinkProjectId = e.detail.id;
+    editorLinkProjectTitle = e.detail.title;
+    showLinkEditor = true;
+  }
+
+  function openEditLink(e: CustomEvent<ProjectLink>) {
+    editorLink = e.detail;
+    const proj = $projects.find(p => p.id === e.detail.project_id);
+    editorLinkProjectId = e.detail.project_id;
+    editorLinkProjectTitle = proj?.title ?? '';
+    showLinkEditor = true;
+  }
+
+  function closeLinkEditor() { showLinkEditor = false; editorLink = null; }
+
   function openNewLogInProject(e: CustomEvent<{ project: Project; typeId: number }>) {
     openNew(e.detail.typeId, e.detail.project.id);
   }
@@ -280,6 +302,7 @@
       <button class="btn-clear-filters" on:click={clearAllFilters}>✕ Clear filters</button>
     </div>
     <nav class="menu-nav">
+      <a href="/deadlines" class="btn-secondary-sm">Deadlines</a>
       <button class="btn-secondary-sm" on:click={openNewProject}>+ New Project</button>
       <button class="theme-toggle" on:click={() => showSettings = true} title="Settings">⚙️</button>
     </nav>
@@ -315,6 +338,7 @@
             allLogs={matchingLogs}
             allLogsTotal={$logs}
             allProjects={$projects}
+            allLinks={$projectLinks}
             {visibleProjectIds}
             {ancestorOnlyProjectIds}
             {showClosed}
@@ -324,6 +348,8 @@
             on:editProject={openEditProject}
             on:newSubProject={openNewSubProject}
             on:newLogInProject={openNewLogInProject}
+            on:newLink={openNewLink}
+            on:editLink={openEditLink}
           />
         {/each}
 
@@ -359,6 +385,15 @@
       {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
       {cat1Label} {cat2Label} {cat3Label} {cat4Label}
       on:close={closeProjectEditor}
+    />
+  {/if}
+
+  {#if showLinkEditor}
+    <LinkEditor
+      link={editorLink}
+      projectId={editorLinkProjectId}
+      projectTitle={editorLinkProjectTitle}
+      on:close={closeLinkEditor}
     />
   {/if}
 
@@ -496,6 +531,7 @@
     border: 1px solid var(--border); border-radius: 10px;
     padding: 8px 14px; font-size: 14px; font-weight: 600; cursor: pointer;
     font-family: inherit; transition: background 0.15s, color 0.15s;
+    text-decoration: none; display: inline-flex; align-items: center;
   }
   .btn-secondary-sm:hover { background: var(--surface-2); color: var(--text); }
 
