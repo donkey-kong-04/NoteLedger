@@ -205,7 +205,7 @@ Projects are displayed as a vertical tree list (not a grid). Each level of nesti
 Each **project card** contains:
 - **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button
 - **Body** (80% / 20% split when links exist):
-  - **Log table** (80%, if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted by deadline descending (no deadline last). Closed log rows are greyed out. Hovering a row expands the Description cell to show the full text.
+  - **Log table** (80%, if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date ASC. Closed log rows are greyed out. Hovering a row expands the Description cell to show the full text.
   - **Links panel** (20%, if links exist): list of project links displayed as Confluence-style cards (chain icon + label). Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
 - Sub-projects rendered immediately below the body, at the next indent level.
 
@@ -238,7 +238,7 @@ Accessible via the **"Deadlines"** button in the top-right menu bar. Shows a rea
 | Deadline | Color-coded pill (see color rules below); blank if no due date |
 | Description | Full rich text, not truncated |
 
-Sorted by due date descending (no due date → end of list). Descriptions are always fully expanded — no hover needed. A **← Back** link returns to the main view.
+Sorted by due date ASC (no due date → end of list). Descriptions are always fully expanded — no hover needed. A **← Back** link returns to the main view.
 
 **Deadline color rules** (applied in both the project card log table and the Deadlines page; closed logs are never color-coded):
 

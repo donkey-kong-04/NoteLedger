@@ -40,10 +40,12 @@
   $: ownLogs = allLogs
     .filter(l => Number(l.project_id) === Number(project.id))
     .sort((a, b) => {
+      // open with date ASC, then open without date, then closed with date ASC
+      if (a.is_closed !== b.is_closed) return a.is_closed ? 1 : -1;
       if (!a.due_date && !b.due_date) return 0;
       if (!a.due_date) return 1;
       if (!b.due_date) return -1;
-      return b.due_date.localeCompare(a.due_date);
+      return a.due_date.localeCompare(b.due_date);
     });
 
   $: ownLogsTotal = allLogsTotal.filter(l => Number(l.project_id) === Number(project.id));

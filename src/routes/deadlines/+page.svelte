@@ -31,7 +31,7 @@
     if (!a.due_date && !b.due_date) return 0;
     if (!a.due_date) return 1;
     if (!b.due_date) return -1;
-    return b.due_date.localeCompare(a.due_date);
+    return a.due_date.localeCompare(b.due_date);
   });
 </script>
 
