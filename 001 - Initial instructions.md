@@ -191,11 +191,11 @@ Badge style:
 Projects are displayed as a vertical tree list (not a grid). Each level of nesting is indented 24px to the right relative to its parent, giving a visual hierarchy without drawing tree lines.
 
 Each **project card** contains:
-- **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **+** button
+- **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **+** button
 - **Log table** (if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted by deadline descending (no deadline last). Closed log rows are greyed out. Hovering a row expands the Description cell to show the full text.
 - Sub-projects rendered immediately below the log table, at the next indent level.
 
-The **+** button on each project opens a **type picker** dropdown (purple background, white text). Selecting a log type opens the Log Editor pre-filled with that type and the project. The dropdown is dismissed by clicking outside it.
+The **＋ Sub-project** button opens the Project Editor pre-filled with the current project as the parent. The **+** button on each project opens a **type picker** dropdown (purple background, white text). Selecting a log type opens the Log Editor pre-filled with that type and the project. The dropdown is dismissed by clicking outside it.
 
 The log count badge always shows `open / total` (e.g. `2 / 5`). It is always visible next to the `+` button.
 

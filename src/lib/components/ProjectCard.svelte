@@ -94,6 +94,7 @@
       <span class="closed-pill">Closed</span>
     {/if}
     <span class="count-badge">{countLabel}</span>
+    <button class="sub-btn" on:click={() => dispatch('newSubProject', project)} title="New sub-project">＋ Sub-project</button>
     <div class="add-wrap">
       <button class="add-btn" on:click={() => showTypePicker = !showTypePicker} title="Add log">+</button>
       {#if showTypePicker}
@@ -187,6 +188,7 @@
       on:edit
       on:editProject
       on:newLogInProject
+      on:newSubProject
     />
   {/each}
 {/if}
@@ -239,6 +241,15 @@
     background: var(--surface-3); border-radius: 999px;
     padding: 1px 7px; font-weight: 600; flex-shrink: 0;
   }
+
+  .sub-btn {
+    font-size: 11px; color: var(--text-muted);
+    background: none; border: 1.5px dashed var(--border);
+    border-radius: 999px; padding: 2px 8px;
+    cursor: pointer; font-family: inherit; flex-shrink: 0;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .sub-btn:hover { color: var(--text); border-color: var(--text-muted); }
 
   .add-wrap { position: relative; flex-shrink: 0; }
 

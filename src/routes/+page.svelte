@@ -235,6 +235,12 @@
   function openNewLogInProject(e: CustomEvent<{ project: Project; typeId: number }>) {
     openNew(e.detail.typeId, e.detail.project.id);
   }
+
+  function openNewSubProject(e: CustomEvent<Project>) {
+    const parent = e.detail;
+    editorProject = { id: 0, title: '', description: '', parent_id: parent.id, is_closed: false, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
+    showProjectEditor = true;
+  }
 </script>
 
 <div class="app" class:dark={isDark} style={densityStyle}>
@@ -316,6 +322,7 @@
             {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
             on:edit={openEdit}
             on:editProject={openEditProject}
+            on:newSubProject={openNewSubProject}
             on:newLogInProject={openNewLogInProject}
           />
         {/each}
