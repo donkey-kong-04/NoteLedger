@@ -2,7 +2,7 @@
   import { createEventDispatcher } from 'svelte';
   import Badge from './Badge.svelte';
   import type { Project, PicklistValue } from '../types';
-  import { CAT_COLORS } from '../types';
+  import { CAT_COLORS, sortedProjectOptions } from '../types';
   import { createProject, updateProject, deleteProject, createPicklistValue, picklists } from '../store';
 
   export let project: Project | null = null;
@@ -30,7 +30,7 @@
   let confirmDelete = false;
   let error = '';
 
-  $: availableParents = allProjects.filter(p => p.id !== draft.id);
+  $: availableParents = sortedProjectOptions(allProjects, draft.id);
 
   const byLabel = (a: PicklistValue, b: PicklistValue) => a.label.localeCompare(b.label);
   $: liveCat1 = $picklists.filter(v => v.picklist_type === 'category_1').sort(byLabel);
@@ -141,7 +141,7 @@
         <select bind:value={draft.parent_id}>
         <option value={null}>None (top-level)</option>
         {#each availableParents as p}
-          <option value={p.id}>{p.title}</option>
+          <option value={p.id}>{p.label}</option>
         {/each}
       </select>
       </div>

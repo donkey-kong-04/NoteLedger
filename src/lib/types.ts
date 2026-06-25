@@ -83,6 +83,23 @@ export function contrastText(hex: string): string {
   return lum > 0.45 ? '#000000' : '#ffffff';
 }
 
+// Returns projects in hierarchy order (parents sorted A-Z, children immediately below their parent, indented with spaces).
+export function sortedProjectOptions(projects: Project[], excludeId?: number): { id: number; label: string }[] {
+  const filtered = excludeId != null ? projects.filter(p => p.id !== excludeId) : projects;
+  const result: { id: number; label: string }[] = [];
+  function walk(parentId: number | null, depth: number) {
+    const children = filtered
+      .filter(p => (p.parent_id ?? null) === parentId)
+      .sort((a, b) => a.title.localeCompare(b.title));
+    for (const p of children) {
+      result.push({ id: p.id, label: '    '.repeat(depth) + p.title });
+      walk(p.id, depth + 1);
+    }
+  }
+  walk(null, 0);
+  return result;
+}
+
 export function deadlineColor(due: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

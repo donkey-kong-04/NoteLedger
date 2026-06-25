@@ -3,7 +3,7 @@
   import Badge from './Badge.svelte';
   import RichTextEditor from './RichTextEditor.svelte';
   import type { Log, PicklistValue, Project } from '../types';
-  import { CAT_COLORS } from '../types';
+  import { CAT_COLORS, sortedProjectOptions } from '../types';
   import { createLog, updateLog, deleteLog, createPicklistValue, picklists } from '../store';
 
   export let log: Log | null = null;
@@ -163,8 +163,8 @@ if (isNew) {
           draft = { ...draft, project_id: Number((e.target as HTMLSelectElement).value) };
         }}
       >
-        {#each allProjects as p}
-          <option value={String(p.id)}>{p.title}</option>
+        {#each sortedProjectOptions(allProjects) as p}
+          <option value={String(p.id)}>{p.label}</option>
         {/each}
       </select>
     </div>
