@@ -23,7 +23,6 @@
 
   const dispatch = createEventDispatcher();
   let collapsed = false;
-  let hoveredLogId: number | null = null;
   let showTypePicker = false;
 
   function pickType(typeId: number) {
@@ -140,8 +139,6 @@
                     class="log-row"
                     class:log-closed={log.is_closed}
                     on:click={() => dispatch('edit', log)}
-                    on:mouseenter={() => hoveredLogId = log.id}
-                    on:mouseleave={() => hoveredLogId = null}
                     role="button" tabindex="0"
                     on:keydown={e => e.key === 'Enter' && dispatch('edit', log)}
                   >
@@ -165,7 +162,7 @@
                     </td>
                     <td class="col-desc">
                       {#if log.description}
-                        <div class="log-desc" class:expanded={hoveredLogId === log.id} on:click|stopPropagation={handleLinkClick}>{@html log.description}</div>
+                        <div class="log-desc" on:click|stopPropagation={handleLinkClick}>{@html log.description}</div>
                       {/if}
                     </td>
                   </tr>
@@ -372,14 +369,6 @@
 
   .log-desc {
     font-size: 12px; color: var(--text-muted); line-height: 1.5;
-    max-height: 3.6em; overflow: hidden;
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3;
-    transition: max-height 0.2s ease;
-  }
-  .log-desc.expanded {
-    max-height: 2000px;
-    -webkit-line-clamp: unset;
-    display: block;
   }
   .log-desc :global(*) { margin: 0; }
   .log-desc :global(ul), .log-desc :global(ol) { padding-left: 16px; }

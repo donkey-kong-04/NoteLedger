@@ -205,7 +205,7 @@ Projects are displayed as a vertical tree list (not a grid). Each level of nesti
 Each **project card** contains:
 - **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button
 - **Body** (80% / 20% split when links exist):
-  - **Log table** (80%, if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date ASC. Closed log rows are greyed out. Hovering a row expands the Description cell to show the full text.
+  - **Log table** (80%, if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date ASC. Closed log rows are greyed out. Descriptions are always fully visible (no hover needed).
   - **Links panel** (20%, if links exist): list of project links displayed as Confluence-style cards (chain icon + label). Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
 - Sub-projects rendered immediately below the body, at the next indent level.
 
