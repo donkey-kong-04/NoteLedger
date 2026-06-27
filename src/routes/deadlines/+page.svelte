@@ -3,6 +3,7 @@
   import { logs, projects, picklists, loadAll } from '$lib/store';
   import { deadlineColor, contrastText, handleLinkClick } from '$lib/types';
   import type { Log, Project, PicklistValue } from '$lib/types';
+  import Badge from '$lib/components/Badge.svelte';
 
   onMount(() => loadAll());
 
@@ -10,10 +11,9 @@
     return $projects.find(p => p.id === log.project_id);
   }
 
-  function getProjectTitle(log: Log): string {
+  function getProjectPath(log: Log): string {
     const p = getProject(log);
     if (!p) return '—';
-    // Build full path for nested projects
     const parts: string[] = [p.title];
     let cur = p;
     while (cur.parent_id) {
@@ -23,6 +23,44 @@
       cur = parent;
     }
     return parts.join(' › ');
+  }
+
+  // Collect all category badges for a project (own only, not inherited)
+  function getProjectBadges(log: Log): { label: string; catType: string }[] {
+    const p = getProject(log);
+    if (!p) return [];
+    const badges: { label: string; catType: string }[] = [];
+    const slots: [keyof typeof p, string][] = [
+      ['category1_ids', 'category_1'],
+      ['category2_ids', 'category_2'],
+      ['category3_ids', 'category_3'],
+      ['category4_ids', 'category_4'],
+    ];
+    for (const [key, catType] of slots) {
+      const ids = p[key] as number[];
+      for (const id of ids) {
+        const val = $picklists.find(v => v.id === id);
+        if (val) badges.push({ label: val.label, catType });
+      }
+    }
+    return badges;
+  }
+
+  function getLogBadges(log: Log): { label: string; catType: string }[] {
+    const badges: { label: string; catType: string }[] = [];
+    const slots: [number[], string][] = [
+      [log.category1_ids, 'category_1'],
+      [log.category2_ids, 'category_2'],
+      [log.category3_ids, 'category_3'],
+      [log.category4_ids, 'category_4'],
+    ];
+    for (const [ids, catType] of slots) {
+      for (const id of ids) {
+        const val = $picklists.find(v => v.id === id);
+        if (val) badges.push({ label: val.label, catType });
+      }
+    }
+    return badges;
   }
 
   $: openLogs = $logs.filter(l => !l.is_closed);
@@ -59,12 +97,28 @@
           {#each sortedLogs as log (log.id)}
             {@const dl = log.due_date ? deadlineColor(log.due_date) : null}
             {@const dlText = dl ? contrastText(dl) : '#fff'}
+            {@const projBadges = getProjectBadges(log)}
+            {@const logBadges = getLogBadges(log)}
             <tr class="log-row">
               <td class="col-project">
-                <span class="project-title">{getProjectTitle(log)}</span>
+                <span class="project-title">{getProjectPath(log)}</span>
+                {#if projBadges.length > 0}
+                  <div class="badge-row">
+                    {#each projBadges as b}
+                      <Badge label={b.label} catType={b.catType} selected={true} clickable={false} size="sm" />
+                    {/each}
+                  </div>
+                {/if}
               </td>
               <td class="col-title">
                 <span class="log-title">{log.title}</span>
+                {#if logBadges.length > 0}
+                  <div class="badge-row">
+                    {#each logBadges as b}
+                      <Badge label={b.label} catType={b.catType} selected={true} clickable={false} size="sm" />
+                    {/each}
+                  </div>
+                {/if}
               </td>
               <td class="col-deadline">
                 {#if log.due_date}
@@ -158,9 +212,12 @@
   .col-deadline { width: 110px; }
   .col-desc { }
 
-  .project-title { font-size: 12px; color: var(--text-muted); }
-  .log-title { font-weight: 600; color: var(--text); }
+  .project-title { display: block; font-size: 12px; color: var(--text-muted); }
+  .log-title { display: block; font-weight: 600; color: var(--text); }
 
+  .badge-row {
+    display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;
+  }
   .deadline-pill {
     display: inline-block;
     font-size: 11px; font-weight: 600;

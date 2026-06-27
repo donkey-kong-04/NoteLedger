@@ -360,16 +360,6 @@
   </header>
 
   <div class="layout">
-    <div class="top-cats">
-      <div class="top-cat-col">
-        <CategoryFilter catType="category_3" bind:label={cat3Label} values={cat3Vals} bind:selected={selCat3} layout="horizontal" on:labelChange={persistLabelChange} />
-      </div>
-      <div class="top-cat-separator"></div>
-      <div class="top-cat-col">
-        <CategoryFilter catType="category_4" bind:label={cat4Label} values={cat4Vals} bind:selected={selCat4} layout="horizontal" on:labelChange={persistLabelChange} />
-      </div>
-    </div>
-
     <aside class="sidebar">
       <div class="sidebar-cat">
         <CategoryFilter catType="category_1" bind:label={cat1Label} values={cat1Vals} bind:selected={selCat1} layout="vertical" on:labelChange={persistLabelChange} />
@@ -377,6 +367,14 @@
       <div class="sidebar-separator"></div>
       <div class="sidebar-cat">
         <CategoryFilter catType="category_2" bind:label={cat2Label} values={cat2Vals} bind:selected={selCat2} layout="vertical" on:labelChange={persistLabelChange} />
+      </div>
+      <div class="sidebar-separator"></div>
+      <div class="sidebar-cat">
+        <CategoryFilter catType="category_3" bind:label={cat3Label} values={cat3Vals} bind:selected={selCat3} layout="vertical" on:labelChange={persistLabelChange} />
+      </div>
+      <div class="sidebar-separator"></div>
+      <div class="sidebar-cat">
+        <CategoryFilter catType="category_4" bind:label={cat4Label} values={cat4Vals} bind:selected={selCat4} layout="vertical" on:labelChange={persistLabelChange} />
       </div>
     </aside>
 
@@ -506,28 +504,20 @@
   .layout {
     display: grid;
     grid-template-columns: 230px 1fr;
-    grid-template-rows: auto 1fr;
+    grid-template-rows: 1fr;
     flex: 1; overflow: hidden; min-height: 0;
   }
 
   .sidebar {
-    grid-column: 1; grid-row: 1 / 3;
+    grid-column: 1; grid-row: 1;
     background: var(--surface); border-right: 1px solid var(--border);
     display: flex; flex-direction: column; overflow: hidden; min-height: 0;
   }
   .sidebar-cat { flex: 1; overflow-y: auto; padding: var(--sp-sidebar-pad); min-height: 0; }
   .sidebar-separator { height: 1px; background: var(--border); flex-shrink: 0; margin: 0 12px; }
 
-  .top-cats {
-    grid-column: 2; grid-row: 1;
-    display: flex; flex-direction: row; align-items: stretch;
-    background: var(--surface); border-bottom: 1px solid var(--border);
-  }
-  .top-cat-col { flex: 1; padding: var(--sp-topcat-pad); min-width: 0; }
-  .top-cat-separator { width: 1px; background: var(--border); flex-shrink: 0; }
-
   .main {
-    grid-column: 2; grid-row: 2;
+    grid-column: 2; grid-row: 1;
     display: flex; flex-direction: column; overflow: hidden; padding: var(--sp-main-pad); min-height: 0;
   }
 

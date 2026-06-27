@@ -135,11 +135,10 @@ The main screen is divided into four zones:
 - **Menu bar (top)**: split into two groups.
   - **Left group**: Book icon logo, "Show closed" toggle, project lookup, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
   - **Right group** (`nav`): **"Deadlines"** link (navigates to the Deadlines page), "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
-- **Top area (main column)**: Category 3 and Category 4 filter badges, side by side.
-- **Left sidebar (230px)**: Category 1 and Category 2 filter badges, arranged horizontally with wrapping. Category 1 is at the top, directly below the menu bar.
+- **Left sidebar (230px)**: All four category filters stacked vertically (Category 1 → 2 → 3 → 4), each separated by a horizontal rule. Each section is independently scrollable.
 - **Main area**: Project cards in a vertical tree list (full width).
 
-All spacing in the menu bar, sidebar, top category bar, main grid, log/project cards, settings modal, and log/project editors is controlled by the **Layout density** setting (see Settings Panel).
+All spacing in the menu bar, sidebar, main grid, log/project cards, settings modal, and log/project editors is controlled by the **Layout density** setting (see Settings Panel).
 
 ### Show Closed Toggle
 
@@ -239,8 +238,8 @@ Accessible via the **"Deadlines"** button in the top-right menu bar. Shows a rea
 
 | Column | Notes |
 |---|---|
-| Project | Full project path (ancestors joined with `›`) |
-| Log | Log title |
+| Project | Full project path (ancestors joined with `›`); category badges assigned to the project shown below the path |
+| Log | Log title; category badges assigned to the log shown below the title |
 | Deadline | Color-coded pill (see color rules below); blank if no due date |
 | Description | Full rich text, not truncated |
 
