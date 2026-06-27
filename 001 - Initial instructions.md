@@ -27,10 +27,18 @@ The application is developed using:
 **Window:** Opens maximized. Title is set in `src-tauri/tauri.conf.json`.
 **Icon:** Custom NLedger book icon — dark indigo spine (left), lighter indigo body, pages strip (right), "NLedger" text rotated vertically on body. Source PNG at `src-tauri/icons/app-icon-source.png`.
 
+## Testing & CI
+- **Rust:** `cd src-tauri && cargo test --lib` — in-memory SQLite tests covering migrations and repository data-integrity rules (`src-tauri/src/db/tests.rs`).
+- **Frontend:** `npm test` (vitest) — pure filter/visibility logic extracted to `src/lib/filters.ts` (`src/lib/filters.test.ts`).
+- **Type-check:** `npm run check` (svelte-check) must report 0 errors.
+- CI (`.github/workflows/build.yml`) runs all three in a `test` job that must pass before the Windows `build` job produces the installer artifact.
+
 # Data Model
 
 ### DB Migration versioning
-Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **9**.
+Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **9** (tracked by `schema::LATEST_VERSION`).
+
+Before any pending migration runs, `db::open` copies the existing database file to `note_ledger.db.backup-v{N}-{timestamp}` as a safety net. This is skipped for a brand-new database or one already at the latest version.
 
 ### Table: `user_settings`
 Stores application-wide preferences.
@@ -54,7 +62,7 @@ Picklist values for each user-customizable input (four categories + log type).
 | label | TEXT | No | — | Display label |
 
 #### Notes
-- A picklist value can only be deleted if no log references it (enforced server-side).
+- A picklist value (log type or category value) can only be deleted if **nothing references it** — no log uses it as a type or category, and no project uses it as a category (enforced server-side). The error reports how many items still use it.
 - Values are always displayed in alphabetical order.
 
 ### Table: `projects`
@@ -126,6 +134,19 @@ Junction tables for many-to-many category assignments on logs.
 
 Each log can have **multiple values** assigned per category slot.
 
+### Deletion rules (history preservation)
+
+To keep the record intact, the structural entities are protected from deletion server-side; only logs are freely deletable. Closing (`is_closed`) is the non-destructive alternative for logs and projects.
+
+| Entity | Can be deleted when… | Blocked when… |
+|---|---|---|
+| Log | always | — |
+| Project | it has no sub-projects **and** no logs | it has sub-projects, or it still contains logs |
+| Log type | no log uses it | any log is of that type |
+| Category value | no log **and** no project uses it | any log or project has it assigned |
+
+All blocks are enforced in the repository layer and surfaced as inline error text in the relevant editor (Project Editor / Settings panel).
+
 ## User Interface
 
 ### Layout Overview
@@ -181,7 +202,7 @@ All four categories are always visible, acting as quick filters.
 
 - **Label**: editable in place — clicking allows the user to rename the category.
 - **Values**: shown as clickable badges arranged **horizontally with wrapping**; clicking filters the main view. Values are sorted alphabetically.
-- **Edit/Delete buttons**: visible only when a badge is **selected** (not on hover) — ✎ edit (inline rename) and × delete (blocked if any log uses the value).
+- **Edit/Delete buttons**: visible only when a badge is **selected** (not on hover) — ✎ edit (inline rename) and × delete (blocked if any log or project uses the value).
 - **Add or search**: an **"Add or search"** button appears **before** the badges. Clicking it opens an inline search input (border color matches the category color) that simultaneously filters visible badges (case-insensitive substring match as you type) and allows creating new values. Pressing Enter with an exact match toggles that value; with no match, creates a new value and auto-selects it. Clicking a badge while the search is open selects/deselects it and clears the search text. Escape or clicking away closes the input. The same control appears in the Log Editor and Project Editor category sections.
 
 **Filter logic:**
@@ -272,7 +293,7 @@ Fields:
 - Start Date, End Date (optional, no logic enforced — same row)
 - Parent Project + Closed checkbox (same row; parent takes 3× width)
 - **Default Categories** — 2×2 grid of badge toggles; categories assigned here are inherited by all logs in this project and descendant sub-projects; includes "**+ Add**" inline creation per category
-- Delete (blocked if sub-projects exist)
+- Delete (blocked if sub-projects or logs exist — move or delete the logs first)
 
 ### Rich Text Editor
 
