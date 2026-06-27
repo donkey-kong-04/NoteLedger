@@ -1,6 +1,10 @@
 use rusqlite::{Connection, Result, params};
 use crate::models::log::Log;
 
+// The four category junction tables. Table names are compile-time constants
+// (never user input), so interpolating them into SQL is safe.
+const CAT_TABLES: [&str; 4] = ["log_category_1", "log_category_2", "log_category_3", "log_category_4"];
+
 fn sync_cat(conn: &Connection, table: &str, log_id: i64, ids: &[i64]) -> Result<()> {
     let del = format!("DELETE FROM {} WHERE log_id = ?1", table);
     conn.execute(&del, params![log_id])?;
@@ -37,10 +41,10 @@ pub fn list(conn: &Connection) -> Result<Vec<Log>> {
 
     if logs.is_empty() { return Ok(logs); }
 
-    let ids_str = logs.iter().map(|l| l.id.to_string()).collect::<Vec<_>>().join(",");
-
+    // We need every log's categories, so load each junction table in full and
+    // group by log_id — no need to build an `IN (...)` list of ids.
     let load_cats = |table: &str| -> Result<std::collections::HashMap<i64, Vec<i64>>> {
-        let sql = format!("SELECT log_id, value_id FROM {} WHERE log_id IN ({}) ORDER BY log_id, value_id", table, ids_str);
+        let sql = format!("SELECT log_id, value_id FROM {} ORDER BY log_id, value_id", table);
         let mut stmt = conn.prepare(&sql)?;
         let mut map: std::collections::HashMap<i64, Vec<i64>> = std::collections::HashMap::new();
         let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, i64>(1)?)))?;
@@ -48,10 +52,10 @@ pub fn list(conn: &Connection) -> Result<Vec<Log>> {
         Ok(map)
     };
 
-    let c1 = load_cats("log_category_1")?;
-    let c2 = load_cats("log_category_2")?;
-    let c3 = load_cats("log_category_3")?;
-    let c4 = load_cats("log_category_4")?;
+    let c1 = load_cats(CAT_TABLES[0])?;
+    let c2 = load_cats(CAT_TABLES[1])?;
+    let c3 = load_cats(CAT_TABLES[2])?;
+    let c4 = load_cats(CAT_TABLES[3])?;
 
     Ok(logs.into_iter().map(|mut l| {
         l.category1_ids = c1.get(&l.id).cloned().unwrap_or_default();
@@ -63,7 +67,8 @@ pub fn list(conn: &Connection) -> Result<Vec<Log>> {
 }
 
 pub fn insert(conn: &Connection, log: &Log) -> Result<i64> {
-    conn.execute(
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
         "INSERT INTO logs (type_id, title, description, start_date, due_date,
                            is_closed, closed_date, project_id)
          VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
@@ -72,16 +77,18 @@ pub fn insert(conn: &Connection, log: &Log) -> Result<i64> {
             log.due_date, log.is_closed, log.closed_date, log.project_id,
         ],
     )?;
-    let id = conn.last_insert_rowid();
-    sync_cat(conn, "log_category_1", id, &log.category1_ids)?;
-    sync_cat(conn, "log_category_2", id, &log.category2_ids)?;
-    sync_cat(conn, "log_category_3", id, &log.category3_ids)?;
-    sync_cat(conn, "log_category_4", id, &log.category4_ids)?;
+    let id = tx.last_insert_rowid();
+    let cat_ids = [&log.category1_ids, &log.category2_ids, &log.category3_ids, &log.category4_ids];
+    for (table, ids) in CAT_TABLES.iter().zip(cat_ids) {
+        sync_cat(&tx, table, id, ids)?;
+    }
+    tx.commit()?;
     Ok(id)
 }
 
 pub fn update(conn: &Connection, log: &Log) -> Result<()> {
-    conn.execute(
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
         "UPDATE logs SET
             type_id=?1, title=?2, description=?3, due_date=?4,
             is_closed=?5, closed_date=?6, project_id=?7
@@ -92,10 +99,11 @@ pub fn update(conn: &Connection, log: &Log) -> Result<()> {
             log.id,
         ],
     )?;
-    sync_cat(conn, "log_category_1", log.id, &log.category1_ids)?;
-    sync_cat(conn, "log_category_2", log.id, &log.category2_ids)?;
-    sync_cat(conn, "log_category_3", log.id, &log.category3_ids)?;
-    sync_cat(conn, "log_category_4", log.id, &log.category4_ids)?;
+    let cat_ids = [&log.category1_ids, &log.category2_ids, &log.category3_ids, &log.category4_ids];
+    for (table, ids) in CAT_TABLES.iter().zip(cat_ids) {
+        sync_cat(&tx, table, log.id, ids)?;
+    }
+    tx.commit()?;
     Ok(())
 }
 

@@ -1,8 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import CategoryFilter from '$lib/components/CategoryFilter.svelte';
-  import LogCard from '$lib/components/LogCard.svelte';
   import ProjectCard from '$lib/components/ProjectCard.svelte';
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
@@ -11,6 +10,7 @@
   import { settings, picklists, projects, logs, projectLinks, loadAll, saveSettings } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { sortedProjectOptions } from '$lib/types';
+  import { logMatchesSlot, computeVisibility } from '$lib/filters';
 
   const DENSITY_VARS: Record<string, Record<string, string>> = {
     compact: {
@@ -79,12 +79,13 @@
     cat4Label = $settings.category4_label;
   });
 
-  settings.subscribe(s => {
+  const unsubSettings = settings.subscribe(s => {
     cat1Label = s.category1_label;
     cat2Label = s.category2_label;
     cat3Label = s.category3_label;
     cat4Label = s.category4_label;
   });
+  onDestroy(unsubSettings);
 
   async function persistLabelChange() {
     const s = get(settings);
@@ -108,42 +109,8 @@
     showClosed = false;
   }
 
-  // ── Tree helpers ─────────────────────────────────────────────────────────
-
-  function getAncestorIds(projects: Project[], projectId: number): Set<number> {
-    const ids = new Set<number>([projectId]);
-    const p = projects.find(p => p.id === projectId);
-    if (p?.parent_id != null)
-      for (const id of getAncestorIds(projects, Number(p.parent_id))) ids.add(id);
-    return ids;
-  }
-
-  function getDescendantIds(projects: Project[], projectId: number): Set<number> {
-    const ids = new Set<number>([projectId]);
-    projects
-      .filter(p => p.parent_id != null && Number(p.parent_id) === projectId)
-      .forEach(child => getDescendantIds(projects, child.id).forEach(id => ids.add(id)));
-    return ids;
-  }
-
   // ── Category matching (AND logic across all selected values) ─────────────
-
-  function ancestorCatIds(projects: Project[], projectId: number, slot: 1|2|3|4): number[] {
-    const p = projects.find(p => p.id === projectId);
-    if (!p) return [];
-    const own = p[`category${slot}_ids`] as number[];
-    if (p.parent_id != null) return [...own, ...ancestorCatIds(projects, Number(p.parent_id), slot)];
-    return own;
-  }
-
-  function logMatchesSlot(l: Log, slot: 1|2|3|4, sel: number[], projects: Project[]): boolean {
-    if (!sel.length) return true;
-    const available = new Set([
-      ...l[`category${slot}_ids`],
-      ...ancestorCatIds(projects, Number(l.project_id), slot),
-    ]);
-    return sel.every(id => available.has(id));
-  }
+  // Tree/visibility/matching helpers live in $lib/filters (pure + unit-tested).
 
   $: noCatFilter = !selCat1.length && !selCat2.length && !selCat3.length && !selCat4.length;
 
@@ -156,52 +123,11 @@
 
   // ── Project visibility ───────────────────────────────────────────────────
 
-  function subtreeHasLogs(projects: Project[], logs: Log[], projectId: number): boolean {
-    const subtree = getDescendantIds(projects, projectId);
-    return logs.some(l => subtree.has(Number(l.project_id)));
-  }
-
-  function computeVisibility(
-    projects: Project[], logs: Log[],
-    selProject: number | null, showClosed: boolean, noCatFilter: boolean
-  ): { visible: Set<number>; ancestorOnly: Set<number> } {
-    const visible = new Set<number>();
-    const ancestorOnly = new Set<number>();
-
-    if (selProject !== null) {
-      // Ancestor projects: shown as context without logs
-      for (const aid of getAncestorIds(projects, selProject)) {
-        if (aid !== selProject) { visible.add(aid); ancestorOnly.add(aid); }
-      }
-      // Selected project: always shown (ignore show-closed for itself)
-      visible.add(selProject);
-      // Descendants of selected project
-      for (const did of getDescendantIds(projects, selProject)) {
-        if (did === selProject) continue;
-        const p = projects.find(p => p.id === did);
-        if (!p) continue;
-        // No category filter: show all descendants (including closed) — user explicitly chose this project
-        if (noCatFilter) { visible.add(did); continue; }
-        // Category filter active: respect show-closed, only show if subtree has matching logs
-        if (p.is_closed && !showClosed) continue;
-        if (subtreeHasLogs(projects, logs, did)) visible.add(did);
-      }
-    } else {
-      for (const p of projects) {
-        if (p.is_closed && !showClosed) continue;
-        if (noCatFilter || subtreeHasLogs(projects, logs, p.id)) visible.add(p.id);
-      }
-    }
-
-    return { visible, ancestorOnly };
-  }
-
   $: ({ visible: visibleProjectIds, ancestorOnly: ancestorOnlyProjectIds } =
     computeVisibility($projects, matchingLogs, selProject, showClosed, noCatFilter));
 
   $: topLevelProjects = $projects.filter(p => p.parent_id == null);
   $: visibleTopLevelProjects = topLevelProjects.filter(p => visibleProjectIds.has(p.id));
-  $: unassignedLogs = [] as Log[];
 
   $: projectOptions = sortedProjectOptions($projects);
 
@@ -396,12 +322,7 @@
           />
         {/each}
 
-        {#each unassignedLogs as log (log.id)}
-          <LogCard {log} {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals} on:edit={openEdit} />
-        {/each}
-
-
-        {#if topLevelProjects.length === 0 && unassignedLogs.length === 0}
+        {#if topLevelProjects.length === 0}
           <div class="empty">
             <span class="empty-icon">📋</span>
             <p>No logs yet. Click <strong>+ New Log</strong> to get started.</p>

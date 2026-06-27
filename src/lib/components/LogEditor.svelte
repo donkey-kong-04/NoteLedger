@@ -32,11 +32,8 @@
     is_closed: false,
     closed_date: null,
     project_id: allProjects[0]?.id ?? 0,
-    category1_ids: [],
-    category2_ids: [],
-    category3_ids: [],
-    category4_ids: [],
     ...(log ?? {}),
+    // deep-copy the category arrays so editing the draft never mutates the original log
     category1_ids: log?.category1_ids ? [...log.category1_ids] : [],
     category2_ids: log?.category2_ids ? [...log.category2_ids] : [],
     category3_ids: log?.category3_ids ? [...log.category3_ids] : [],

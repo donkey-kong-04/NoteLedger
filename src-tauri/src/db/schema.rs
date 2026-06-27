@@ -1,5 +1,9 @@
 use rusqlite::{Connection, Result};
 
+/// The schema version this build migrates up to. Bump this whenever a new
+/// `if version < N` block is added below.
+pub const LATEST_VERSION: i64 = 9;
+
 pub fn migrate(conn: &Connection) -> Result<()> {
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
 

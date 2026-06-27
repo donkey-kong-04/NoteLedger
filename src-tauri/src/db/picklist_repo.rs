@@ -47,19 +47,22 @@ pub fn update(conn: &Connection, id: i64, label: &str) -> Result<()> {
 
 pub fn delete(conn: &Connection, id: i64) -> Result<()> {
     let in_use: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM (
-            SELECT id FROM logs WHERE type_id = ?1
-            UNION SELECT log_id FROM log_category_1 WHERE value_id = ?1
-            UNION SELECT log_id FROM log_category_2 WHERE value_id = ?1
-            UNION SELECT log_id FROM log_category_3 WHERE value_id = ?1
-            UNION SELECT log_id FROM log_category_4 WHERE value_id = ?1
-         )",
+        "SELECT
+            (SELECT COUNT(*) FROM logs WHERE type_id = ?1)
+          + (SELECT COUNT(*) FROM log_category_1 WHERE value_id = ?1)
+          + (SELECT COUNT(*) FROM log_category_2 WHERE value_id = ?1)
+          + (SELECT COUNT(*) FROM log_category_3 WHERE value_id = ?1)
+          + (SELECT COUNT(*) FROM log_category_4 WHERE value_id = ?1)
+          + (SELECT COUNT(*) FROM project_category_1 WHERE value_id = ?1)
+          + (SELECT COUNT(*) FROM project_category_2 WHERE value_id = ?1)
+          + (SELECT COUNT(*) FROM project_category_3 WHERE value_id = ?1)
+          + (SELECT COUNT(*) FROM project_category_4 WHERE value_id = ?1)",
         params![id],
         |row| row.get(0),
     )?;
     if in_use > 0 {
         return Err(rusqlite::Error::InvalidParameterName(
-            format!("This value is used by {} log(s) and cannot be deleted.", in_use)
+            format!("This value is used by {} item(s) and cannot be deleted.", in_use)
         ));
     }
     conn.execute("DELETE FROM user_customizable_input WHERE id = ?1", params![id])?;

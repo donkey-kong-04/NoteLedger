@@ -94,7 +94,11 @@
     showNewProject = false;
     if (!trimmed) return;
     try {
-      await createProject({ title: trimmed, description: '', parent_id: null });
+      await createProject({
+        title: trimmed, description: '', parent_id: null,
+        is_closed: false, start_date: null, end_date: null,
+        category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [],
+      });
       projectError = '';
     } catch (e: any) { projectError = String(e); }
   }
@@ -192,10 +196,10 @@
 
           <div class="label-grid">
             {#each [
-              { key: 'category_1', bind: () => cat1Label, set: (v) => { cat1Label = v; } },
-              { key: 'category_2', bind: () => cat2Label, set: (v) => { cat2Label = v; } },
-              { key: 'category_3', bind: () => cat3Label, set: (v) => { cat3Label = v; } },
-              { key: 'category_4', bind: () => cat4Label, set: (v) => { cat4Label = v; } },
+              { key: 'category_1', bind: () => cat1Label, set: (v: string) => { cat1Label = v; } },
+              { key: 'category_2', bind: () => cat2Label, set: (v: string) => { cat2Label = v; } },
+              { key: 'category_3', bind: () => cat3Label, set: (v: string) => { cat3Label = v; } },
+              { key: 'category_4', bind: () => cat4Label, set: (v: string) => { cat4Label = v; } },
             ] as cat, i}
               <div class="label-row">
                 <span class="cat-dot" style="background: {CAT_COLORS[cat.key]?.hex}"></span>

@@ -1,6 +1,14 @@
 use rusqlite::{Connection, Result, params, OptionalExtension};
 use crate::models::project::Project;
 
+// The four category junction tables for projects. Names are compile-time
+// constants (never user input), so interpolating them into SQL is safe.
+const CAT_TABLES: [&str; 4] = ["project_category_1", "project_category_2", "project_category_3", "project_category_4"];
+
+fn project_cat_ids(p: &Project) -> [&Vec<i64>; 4] {
+    [&p.category1_ids, &p.category2_ids, &p.category3_ids, &p.category4_ids]
+}
+
 fn load_category_ids(conn: &Connection, table: &str, project_id: i64) -> Result<Vec<i64>> {
     let sql = format!("SELECT value_id FROM {} WHERE project_id = ?1 ORDER BY value_id", table);
     let mut stmt = conn.prepare(&sql)?;
@@ -47,15 +55,16 @@ pub fn list(conn: &Connection) -> Result<Vec<Project>> {
 }
 
 pub fn insert(conn: &Connection, project: &Project) -> Result<i64> {
-    conn.execute(
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
         "INSERT INTO projects (title, description, parent_id, is_closed, start_date, end_date) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         params![project.title, project.description, project.parent_id, project.is_closed, project.start_date, project.end_date],
     )?;
-    let id = conn.last_insert_rowid();
-    save_categories(conn, "project_category_1", id, &project.category1_ids)?;
-    save_categories(conn, "project_category_2", id, &project.category2_ids)?;
-    save_categories(conn, "project_category_3", id, &project.category3_ids)?;
-    save_categories(conn, "project_category_4", id, &project.category4_ids)?;
+    let id = tx.last_insert_rowid();
+    for (table, ids) in CAT_TABLES.iter().zip(project_cat_ids(project)) {
+        save_categories(&tx, table, id, ids)?;
+    }
+    tx.commit()?;
     Ok(id)
 }
 
@@ -67,14 +76,15 @@ pub fn update(conn: &Connection, project: &Project) -> Result<()> {
             ));
         }
     }
-    conn.execute(
+    let tx = conn.unchecked_transaction()?;
+    tx.execute(
         "UPDATE projects SET title=?1, description=?2, parent_id=?3, is_closed=?4, start_date=?5, end_date=?6 WHERE id=?7",
         params![project.title, project.description, project.parent_id, project.is_closed, project.start_date, project.end_date, project.id],
     )?;
-    save_categories(conn, "project_category_1", project.id, &project.category1_ids)?;
-    save_categories(conn, "project_category_2", project.id, &project.category2_ids)?;
-    save_categories(conn, "project_category_3", project.id, &project.category3_ids)?;
-    save_categories(conn, "project_category_4", project.id, &project.category4_ids)?;
+    for (table, ids) in CAT_TABLES.iter().zip(project_cat_ids(project)) {
+        save_categories(&tx, table, project.id, ids)?;
+    }
+    tx.commit()?;
     Ok(())
 }
 
@@ -87,7 +97,19 @@ pub fn delete(conn: &Connection, id: i64) -> Result<()> {
             "Cannot delete a project that has sub-projects.".into()
         ));
     }
-    conn.execute("UPDATE logs SET project_id = NULL WHERE project_id = ?1", params![id])?;
+
+    // A project that still contains logs cannot be deleted — the user must move
+    // or delete those logs first.
+    let log_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM logs WHERE project_id = ?1", params![id], |r| r.get(0)
+    )?;
+    if log_count > 0 {
+        return Err(rusqlite::Error::InvalidParameterName(
+            format!("Cannot delete a project that contains {} log(s). Move or delete them first.", log_count)
+        ));
+    }
+
+    // project_category_* and project_links rows cascade on delete (schema v4/v9).
     conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
     Ok(())
 }
