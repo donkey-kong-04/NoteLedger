@@ -149,11 +149,11 @@ A toggle switch in the top-left of the menu bar (next to the logo) labelled **"S
 ### Project Lookup
 
 A search-style lookup in the menu bar (replaces the old `<select>` dropdown). Behavior:
-- **Click** the input → shows all projects in a floating dropdown, sorted A-Z with sub-projects indented (4 spaces per depth level) immediately below their parent.
+- **Click** the input → clears any active project filter and shows all projects in a floating dropdown, sorted A-Z with sub-projects indented (4 spaces per depth level) immediately below their parent.
 - **Type to filter** — token search, case-insensitive, order-independent (e.g. "api back" matches "Backend API"). The dropdown narrows in real time.
 - **Closed projects** are shown dimmed with a "Closed" pill so their status is immediately visible.
-- **Selecting a project** filters the main view to that project and its descendants; a ✕ button appears on the input to clear the selection.
-- **"All projects"** at the top of the dropdown (always visible) resets the filter.
+- **Selecting a project** filters the main view to that project and its descendants.
+- To clear the project filter, click the input again or use the **✕ Clear filters** button.
 
 Filter logic once a project is selected:
 - Shows the selected project and all its descendants.

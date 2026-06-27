@@ -319,17 +319,11 @@
             type="text"
             placeholder={selProject != null ? selectedProjectLabel : 'Filter project…'}
             bind:value={lookupSearch}
-            on:focus={() => { lookupOpen = true; lookupSearch = ''; }}
+            on:focus={() => { lookupOpen = true; lookupSearch = ''; selProject = null; }}
             on:blur={onLookupBlur}
           />
-          {#if selProject != null && !lookupOpen}
-            <button class="lookup-clear" on:click={() => selectProject(null)} title="Clear">✕</button>
-          {/if}
           {#if lookupOpen}
             <div class="lookup-dropdown">
-              <button class="lookup-option all-option" on:mousedown|preventDefault={() => selectProject(null)}>
-                All projects
-              </button>
               {#each filteredProjectOptions as opt}
                 {@const proj = $projects.find(p => p.id === opt.id)}
                 <button
@@ -596,7 +590,6 @@
     transition: background 0.1s;
   }
   .lookup-option:hover { background: var(--surface-2); }
-  .lookup-option.all-option { font-weight: 600; border-bottom: 1px solid var(--border); white-space: normal; }
   .lookup-option.is-closed { opacity: 0.6; }
   .lookup-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .lookup-closed-pill {
