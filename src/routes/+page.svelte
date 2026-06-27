@@ -205,6 +205,35 @@
 
   $: projectOptions = sortedProjectOptions($projects);
 
+  // ── Project lookup ────────────────────────────────────────────────────────
+  let lookupSearch = '';
+  let lookupOpen = false;
+  let lookupInput: HTMLInputElement;
+
+  $: selectedProjectLabel = selProject != null
+    ? ($projects.find(p => p.id === selProject)?.title ?? '')
+    : '';
+
+  $: filteredProjectOptions = (() => {
+    const tokens = lookupSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return projectOptions.filter(opt => {
+      const title = opt.label.trim().toLowerCase();
+      return tokens.length === 0 || tokens.every(t => title.includes(t));
+    });
+  })();
+
+  function selectProject(id: number | null) {
+    selProject = id;
+    lookupSearch = '';
+    lookupOpen = false;
+    lookupInput?.blur();
+  }
+
+  function onLookupBlur() {
+    // small delay so click on option fires first
+    setTimeout(() => { lookupOpen = false; lookupSearch = ''; }, 150);
+  }
+
   function openNew(typeId: number | null = null, projectId: number | null = null) {
     editorLog = (typeId !== null || projectId !== null)
       ? ({ type_id: typeId ?? logTypes[0]?.id ?? 0, project_id: projectId ?? $projects[0]?.id ?? 0 } as any)
@@ -283,12 +312,43 @@
         <span class="toggle-label">Show closed</span>
       </label>
       {#if $projects.length > 0}
-        <select class="project-filter" value={selProject === null ? '' : String(selProject)} on:change={e => { const v = (e.target as HTMLSelectElement).value; selProject = v === '' ? null : Number(v); }}>
-          <option value="">All projects</option>
-          {#each projectOptions as opt}
-            <option value={String(opt.id)}>{opt.label}</option>
-          {/each}
-        </select>
+        <div class="project-lookup" class:active={lookupOpen}>
+          <input
+            bind:this={lookupInput}
+            class="project-lookup-input"
+            type="text"
+            placeholder={selProject != null ? selectedProjectLabel : 'Filter project…'}
+            bind:value={lookupSearch}
+            on:focus={() => { lookupOpen = true; lookupSearch = ''; }}
+            on:blur={onLookupBlur}
+          />
+          {#if selProject != null && !lookupOpen}
+            <button class="lookup-clear" on:click={() => selectProject(null)} title="Clear">✕</button>
+          {/if}
+          {#if lookupOpen}
+            <div class="lookup-dropdown">
+              <button class="lookup-option all-option" on:mousedown|preventDefault={() => selectProject(null)}>
+                All projects
+              </button>
+              {#each filteredProjectOptions as opt}
+                {@const proj = $projects.find(p => p.id === opt.id)}
+                <button
+                  class="lookup-option"
+                  class:is-closed={proj?.is_closed}
+                  on:mousedown|preventDefault={() => selectProject(opt.id)}
+                >
+                  <span class="lookup-label">{opt.label}</span>
+                  {#if proj?.is_closed}
+                    <span class="lookup-closed-pill">Closed</span>
+                  {/if}
+                </button>
+              {/each}
+              {#if filteredProjectOptions.length === 0}
+                <div class="lookup-empty">No match</div>
+              {/if}
+            </div>
+          {/if}
+        </div>
       {/if}
       <button class="btn-clear-filters" on:click={clearAllFilters}>✕ Clear filters</button>
     </div>
@@ -509,13 +569,53 @@
   }
   .btn-clear-filters:hover { background: rgba(239,68,68,0.1); }
 
-  .project-filter {
+  .project-lookup {
+    position: relative;
+    display: flex; align-items: center;
+  }
+  .project-lookup-input {
     background: var(--surface-2); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px;
-    padding: 6px 10px; font-size: 13px; font-family: inherit;
-    cursor: pointer; outline: none; max-width: 160px;
+    padding: 6px 28px 6px 10px; font-size: 13px; font-family: inherit;
+    outline: none; width: 180px;
+    transition: border-color 0.15s;
   }
-  .project-filter:focus { border-color: var(--accent); }
+  .project-lookup.active .project-lookup-input,
+  .project-lookup-input:focus { border-color: var(--accent); }
+  .lookup-clear {
+    position: absolute; right: 6px;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 11px; padding: 2px;
+    line-height: 1;
+  }
+  .lookup-clear:hover { color: var(--text); }
+  .lookup-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0;
+    min-width: 220px; max-height: 280px; overflow-y: auto;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    z-index: 300;
+    display: flex; flex-direction: column;
+  }
+  .lookup-option {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; text-align: left;
+    background: none; border: none; cursor: pointer;
+    padding: 7px 12px; font-size: 13px; font-family: inherit;
+    color: var(--text); white-space: pre;
+    transition: background 0.1s;
+  }
+  .lookup-option:hover { background: var(--surface-2); }
+  .lookup-option.all-option { font-weight: 600; border-bottom: 1px solid var(--border); white-space: normal; }
+  .lookup-option.is-closed { opacity: 0.6; }
+  .lookup-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .lookup-closed-pill {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    background: var(--border); color: var(--text-muted);
+    border-radius: 999px; padding: 1px 6px; flex-shrink: 0;
+    white-space: normal;
+  }
+  .lookup-empty { padding: 8px 12px; font-size: 12px; color: var(--text-muted); }
 
   .btn-secondary-sm {
     background: none; color: var(--text-muted);

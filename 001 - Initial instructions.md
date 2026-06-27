@@ -133,7 +133,7 @@ Each log can have **multiple values** assigned per category slot.
 The main screen is divided into four zones:
 
 - **Menu bar (top)**: split into two groups.
-  - **Left group**: Book icon logo, "Show closed" toggle, project filter dropdown, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
+  - **Left group**: Book icon logo, "Show closed" toggle, project lookup, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
   - **Right group** (`nav`): **"Deadlines"** link (navigates to the Deadlines page), "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
 - **Top area (main column)**: Category 3 and Category 4 filter badges, side by side.
 - **Left sidebar (230px)**: Category 1 and Category 2 filter badges, arranged horizontally with wrapping. Category 1 is at the top, directly below the menu bar.
@@ -147,14 +147,20 @@ A toggle switch in the top-left of the menu bar (next to the logo) labelled **"S
 - **Off (default)**: closed **projects** are hidden. Closed **logs** are always shown inside visible projects (greyed out at 60% opacity).
 - **On**: closed projects are also visible (rendered at 55% opacity). Closed logs remain visible in all cases.
 
-### Project Filter Dropdown
+### Project Lookup
 
-A `<select>` in the menu bar listing all projects (indented to show hierarchy). Selecting a project:
+A search-style lookup in the menu bar (replaces the old `<select>` dropdown). Behavior:
+- **Click** the input → shows all projects in a floating dropdown, sorted A-Z with sub-projects indented (4 spaces per depth level) immediately below their parent.
+- **Type to filter** — token search, case-insensitive, order-independent (e.g. "api back" matches "Backend API"). The dropdown narrows in real time.
+- **Closed projects** are shown dimmed with a "Closed" pill so their status is immediately visible.
+- **Selecting a project** filters the main view to that project and its descendants; a ✕ button appears on the input to clear the selection.
+- **"All projects"** at the top of the dropdown (always visible) resets the filter.
+
+Filter logic once a project is selected:
 - Shows the selected project and all its descendants.
 - Ancestor projects (parent chain up to root) are shown as context-only — their header is visible but their log table is hidden.
 - When no category filter is active, **all descendants are shown** including closed ones, regardless of whether they have logs.
 - When category filters are active, descendants are only shown if their subtree contains matching logs (closed ones still respect the "Show closed" toggle).
-- Selecting "All projects" resets the filter.
 
 ### Clear Filters Button
 
