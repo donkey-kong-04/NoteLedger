@@ -155,7 +155,7 @@ The main screen is divided into four zones:
 
 - **Menu bar (top)**: split into two groups.
   - **Left group**: Book icon logo, "Show closed" toggle, project lookup, log type filter, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
-  - **Right group** (`nav`): **"Deadlines"** link (navigates to the Deadlines page), "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
+  - **Right group** (`nav`): **"Fold all / Unfold all"** toggle button, **"Deadlines"** link (navigates to the Deadlines page), "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
 - **Left sidebar (230px)**: All four category filters stacked vertically (Category 1 → 2 → 3 → 4), each separated by a horizontal rule. Each section is independently scrollable.
 - **Main area**: Project cards in a vertical tree list (full width).
 
@@ -232,6 +232,8 @@ Badge style:
 ### Project Tree (Main Area)
 
 Projects are displayed as a vertical tree list (not a grid). Each level of nesting is indented 24px to the right relative to its parent, giving a visual hierarchy without drawing tree lines.
+
+The **"Fold all / Unfold all"** button in the menu bar collapses every project card (including nested sub-projects) to its header in one click, then toggles to expand them all again. Individual cards can still be folded/unfolded via their chevron in between — the button re-broadcasts the global state on each press.
 
 Each **project card** contains:
 - **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button

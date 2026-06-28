@@ -14,6 +14,8 @@
   export let ancestorOnlyProjectIds: Set<number> = new Set();
   export let showClosed: boolean = false;
   export let depth: number = 0;
+  export let collapseSignal: number = 0;
+  export let collapseAll: boolean = false;
   export let allLinks: ProjectLink[] = [];
   export let logTypes: PicklistValue[];
   export let cat1Vals: PicklistValue[];
@@ -24,6 +26,14 @@
   const dispatch = createEventDispatcher();
   let collapsed = false;
   let showTypePicker = false;
+
+  // Apply a global fold/unfold only when the signal changes — leaves the local
+  // chevron toggle untouched in between.
+  let lastCollapseSignal = collapseSignal;
+  $: if (collapseSignal !== lastCollapseSignal) {
+    lastCollapseSignal = collapseSignal;
+    collapsed = collapseAll;
+  }
 
   function pickType(typeId: number) {
     showTypePicker = false;
@@ -211,6 +221,7 @@
       subProjects={allProjects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(sub.id))}
       {allLogs} {allLogsTotal} {allProjects} {allLinks}
       {visibleProjectIds} {ancestorOnlyProjectIds} {showClosed}
+      {collapseSignal} {collapseAll}
       depth={depth + 1}
       {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
       on:edit

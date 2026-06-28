@@ -67,6 +67,14 @@
   let selProject: number | null = null;
   let selLogType: number | null = null;
 
+  // Fold/unfold all projects — broadcast to every ProjectCard via a bumped signal.
+  let allCollapsed = false;
+  let collapseSignal = 0;
+  function toggleFoldAll() {
+    allCollapsed = !allCollapsed;
+    collapseSignal++;
+  }
+
   let cat1Label = '';
   let cat2Label = '';
   let cat3Label = '';
@@ -287,6 +295,7 @@
       <button class="btn-clear-filters" on:click={clearAllFilters}>✕ Clear filters</button>
     </div>
     <nav class="menu-nav">
+      <button class="btn-secondary-sm" on:click={toggleFoldAll}>{allCollapsed ? '▸ Unfold all' : '▾ Fold all'}</button>
       <a href="/deadlines" class="btn-secondary-sm">Deadlines</a>
       <button class="btn-secondary-sm" on:click={openNewProject}>+ New Project</button>
       <button class="theme-toggle" on:click={() => showSettings = true} title="Settings">⚙️</button>
@@ -325,6 +334,8 @@
             {visibleProjectIds}
             {ancestorOnlyProjectIds}
             {showClosed}
+            {collapseSignal}
+            collapseAll={allCollapsed}
             depth={0}
             {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
             on:edit={openEdit}
