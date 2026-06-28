@@ -100,6 +100,26 @@ export function sortedProjectOptions(projects: Project[], excludeId?: number): {
   return result;
 }
 
+// Whole days between an ISO date (YYYY-MM-DD) and today, in local time.
+export function daysSince(dateStr: string | null): number {
+  if (!dateStr) return 0;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return 0;
+  const start = new Date(y, m - 1, d);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.floor((today.getTime() - start.getTime()) / 86400000);
+}
+
+// "Open since today" / "Open since 1 day" / "Open since N days" — empty for closed logs.
+export function openSinceLabel(log: Log): string {
+  if (log.is_closed) return '';
+  const d = daysSince(log.start_date);
+  if (d <= 0) return 'Open since today';
+  if (d === 1) return 'Open since 1 day';
+  return `Open since ${d} days`;
+}
+
 export function deadlineColor(due: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

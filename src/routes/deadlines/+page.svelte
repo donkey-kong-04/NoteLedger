@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { logs, projects, picklists, loadAll } from '$lib/store';
-  import { deadlineColor, contrastText, handleLinkClick } from '$lib/types';
+  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel } from '$lib/types';
   import type { Log, Project, PicklistValue } from '$lib/types';
   import Badge from '$lib/components/Badge.svelte';
 
@@ -44,6 +44,10 @@
       }
     }
     return badges;
+  }
+
+  function getLogTypeLabel(log: Log): string {
+    return $picklists.find(v => v.id === log.type_id && v.picklist_type === 'log_type')?.label ?? '';
   }
 
   function getLogBadges(log: Log): { label: string; catType: string }[] {
@@ -99,6 +103,7 @@
             {@const dlText = dl ? contrastText(dl) : '#fff'}
             {@const projBadges = getProjectBadges(log)}
             {@const logBadges = getLogBadges(log)}
+            {@const typeMeta = [getLogTypeLabel(log), openSinceLabel(log)].filter(Boolean).join(' · ')}
             <tr class="log-row">
               <td class="col-project">
                 <span class="project-title">{getProjectPath(log)}</span>
@@ -112,6 +117,9 @@
               </td>
               <td class="col-title">
                 <span class="log-title">{log.title}</span>
+                {#if typeMeta}
+                  <span class="log-type">{typeMeta}</span>
+                {/if}
                 {#if logBadges.length > 0}
                   <div class="badge-row">
                     {#each logBadges as b}
@@ -214,6 +222,7 @@
 
   .project-title { display: block; font-size: 12px; color: var(--text-muted); }
   .log-title { display: block; font-weight: 600; color: var(--text); }
+  .log-type { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 
   .badge-row {
     display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px;

@@ -65,6 +65,7 @@
   let selCat3: number[] = [];
   let selCat4: number[] = [];
   let selProject: number | null = null;
+  let selLogType: number | null = null;
 
   let cat1Label = '';
   let cat2Label = '';
@@ -106,15 +107,20 @@
   function clearAllFilters() {
     selCat1 = []; selCat2 = []; selCat3 = []; selCat4 = [];
     selProject = null;
+    selLogType = null;
     showClosed = false;
   }
 
   // ── Category matching (AND logic across all selected values) ─────────────
   // Tree/visibility/matching helpers live in $lib/filters (pure + unit-tested).
 
-  $: noCatFilter = !selCat1.length && !selCat2.length && !selCat3.length && !selCat4.length;
+  // True when no filter that narrows the visible logs is active — used to decide
+  // whether projects with no matching logs should still be shown.
+  $: noLogFilter = !selCat1.length && !selCat2.length && !selCat3.length && !selCat4.length
+    && selLogType === null;
 
   $: matchingLogs = $logs.filter(l =>
+    (selLogType === null || l.type_id === selLogType) &&
     logMatchesSlot(l, 1, selCat1, $projects) &&
     logMatchesSlot(l, 2, selCat2, $projects) &&
     logMatchesSlot(l, 3, selCat3, $projects) &&
@@ -124,7 +130,7 @@
   // ── Project visibility ───────────────────────────────────────────────────
 
   $: ({ visible: visibleProjectIds, ancestorOnly: ancestorOnlyProjectIds } =
-    computeVisibility($projects, matchingLogs, selProject, showClosed, noCatFilter));
+    computeVisibility($projects, matchingLogs, selProject, showClosed, noLogFilter));
 
   $: topLevelProjects = $projects.filter(p => p.parent_id == null);
   $: visibleTopLevelProjects = topLevelProjects.filter(p => visibleProjectIds.has(p.id));
@@ -269,6 +275,14 @@
             </div>
           {/if}
         </div>
+      {/if}
+      {#if logTypes.length > 0}
+        <select class="logtype-filter" class:active={selLogType !== null} bind:value={selLogType} title="Filter by log type">
+          <option value={null}>All types</option>
+          {#each logTypes as t (t.id)}
+            <option value={t.id}>{t.label}</option>
+          {/each}
+        </select>
       {/if}
       <button class="btn-clear-filters" on:click={clearAllFilters}>✕ Clear filters</button>
     </div>
@@ -465,6 +479,16 @@
     transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
   }
   .toggle-switch.on .toggle-thumb { left: 18px; }
+
+  .logtype-filter {
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px; font-size: 13px; font-family: inherit;
+    outline: none; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .logtype-filter:focus { border-color: var(--accent); }
+  .logtype-filter.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
 
   .btn-clear-filters {
     background: none; color: #ef4444;

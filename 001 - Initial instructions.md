@@ -154,7 +154,7 @@ All blocks are enforced in the repository layer and surfaced as inline error tex
 The main screen is divided into four zones:
 
 - **Menu bar (top)**: split into two groups.
-  - **Left group**: Book icon logo, "Show closed" toggle, project lookup, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
+  - **Left group**: Book icon logo, "Show closed" toggle, project lookup, log type filter, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
   - **Right group** (`nav`): **"Deadlines"** link (navigates to the Deadlines page), "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
 - **Left sidebar (230px)**: All four category filters stacked vertically (Category 1 → 2 → 3 → 4), each separated by a horizontal rule. Each section is independently scrollable.
 - **Main area**: Project cards in a vertical tree list (full width).
@@ -181,6 +181,10 @@ Filter logic once a project is selected:
 - Ancestor projects (parent chain up to root) are shown as context-only — their header is visible but their log table is hidden.
 - When no category filter is active, **all descendants are shown** including closed ones, regardless of whether they have logs.
 - When category filters are active, descendants are only shown if their subtree contains matching logs (closed ones still respect the "Show closed" toggle).
+
+### Log Type Filter
+
+A **basic single-select dropdown** in the menu bar (left group, next to the project lookup), defaulting to **"All types"** and listing every configured log type. Selecting a type narrows the view to logs of that type only; it highlights in the accent color when active. Unlike the category filters (multi-select badges), this is a plain picklist — one type at a time. It composes (AND) with the category and project filters, and like them, projects whose subtree has no matching logs are hidden while it is active. Reset via "All types" or the **✕ Clear filters** button.
 
 ### Clear Filters Button
 
@@ -209,7 +213,8 @@ All four categories are always visible, acting as quick filters.
 - Selecting multiple values within the **same category** → **AND** (the log+project combined must carry ALL selected values)
 - Selecting values across **different categories** → **AND** (log must match all active category filters)
 - A log's **effective category set** = its own categories **∪** all ancestor project categories (recursive)
-- When category filters are active, projects whose entire subtree has no matching logs are **hidden automatically**
+- The **log type filter** (menu-bar picklist) further restricts to a single log type, AND-ed with the category filters
+- When any log-narrowing filter (category or log type) is active, projects whose entire subtree has no matching logs are **hidden automatically**
 - When "Show closed" is off, closed projects are hidden regardless of other filters
 - When a project is selected in the dropdown with no category filter active, all descendant projects are shown (including closed ones)
 
@@ -231,7 +236,7 @@ Projects are displayed as a vertical tree list (not a grid). Each level of nesti
 Each **project card** contains:
 - **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button
 - **Body** (80% / 20% split when links exist):
-  - **Log table** (80%, if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date ASC. Closed log rows are greyed out. Descriptions are always fully visible (no hover needed).
+  - **Log table** (80%, if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date ASC. Closed log rows are greyed out. Descriptions are always fully visible (no hover needed). The **Title** cell shows the log title, then a muted meta line below it reading `{log type} · Open since {N} days` (open logs only — "Open since today" / "1 day" / "N days", computed from the log's creation/start date; closed logs show just the log type), then any category badges.
   - **Links panel** (20%, if links exist): list of project links displayed as Confluence-style cards (chain icon + label). Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
 - Sub-projects rendered immediately below the body, at the next indent level.
 
@@ -260,7 +265,7 @@ Accessible via the **"Deadlines"** button in the top-right menu bar. Shows a rea
 | Column | Notes |
 |---|---|
 | Project | Full project path (ancestors joined with `›`); category badges assigned to the project shown below the path |
-| Log | Log title; category badges assigned to the log shown below the title |
+| Log | Log title; a muted `{log type} · Open since {N} days` meta line below it (all deadline-page logs are open); category badges assigned to the log shown below that |
 | Deadline | Color-coded pill (see color rules below); blank if no due date |
 | Description | Full rich text, not truncated |
 

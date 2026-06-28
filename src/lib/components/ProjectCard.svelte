@@ -1,7 +1,7 @@
 <script lang="ts">
   import Badge from './Badge.svelte';
   import { createEventDispatcher } from 'svelte';
-  import { deadlineColor, contrastText, handleLinkClick } from '../types';
+  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel } from '../types';
   import type { Log, Project, PicklistValue, ProjectLink } from '../types';
   import { openLink } from '../types';
 
@@ -135,6 +135,7 @@
                   {@const dlText = dl ? contrastText(dl) : '#fff'}
                   {@const badges = getCatBadges(log)}
                   {@const type = getLogType(log)}
+                  {@const typeMeta = [type?.label, openSinceLabel(log)].filter(Boolean).join(' · ')}
                   <tr
                     class="log-row"
                     class:log-closed={log.is_closed}
@@ -144,8 +145,8 @@
                   >
                     <td class="col-title">
                       <span class="log-title">{log.title}</span>
-                      {#if type}
-                        <span class="log-type">{type.label}</span>
+                      {#if typeMeta}
+                        <span class="log-type">{typeMeta}</span>
                       {/if}
                       {#if badges.length > 0}
                         <div class="log-badges">
