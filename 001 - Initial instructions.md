@@ -38,7 +38,7 @@ The application is developed using:
 ### DB Migration versioning
 Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **10** (tracked by `schema::LATEST_VERSION`).
 
-Before any pending migration runs, `db::open` copies the existing database file to `note_ledger.db.backup-v{N}-{timestamp}` as a safety net. This is skipped for a brand-new database or one already at the latest version.
+Before any pending migration runs, `db::open` copies the existing database file to `note_ledger.db.backup-v{N}-{timestamp}` (same folder as the DB) and **verifies** the copy (size match + backup opens as SQLite at the expected schema version). If the WAL flush, copy, or verification fails, **the app refuses to start and the migration does not run** — the database is left untouched, and a `STARTUP-ERROR.txt` explaining the reason is written next to the DB (a bundled app has no console). Skipped for a brand-new database or one already at the latest version.
 
 ### Table: `user_settings`
 Stores application-wide preferences.

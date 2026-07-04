@@ -163,7 +163,16 @@ pub fn run() {
     std::fs::create_dir_all(&data_dir).ok();
     let db_path = data_dir.join("note_ledger.db");
 
-    let conn = db::open(db_path.to_str().unwrap()).expect("Failed to open database");
+    let conn = db::open(db_path.to_str().unwrap()).unwrap_or_else(|e| {
+        // Leave a visible trace next to the DB (a bundled app has no console),
+        // then refuse to start — the database has not been touched.
+        let note = data_dir.join("STARTUP-ERROR.txt");
+        let _ = std::fs::write(&note, format!(
+            "Note Ledger refused to start at {}.\n\nReason: {}\n\nYour database has NOT been modified. Fix the issue (e.g. free disk space) and relaunch.\n",
+            chrono::Local::now(), e
+        ));
+        panic!("Failed to open database: {}", e);
+    });
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
