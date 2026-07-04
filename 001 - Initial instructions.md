@@ -84,7 +84,7 @@ A project groups logs together and can be nested under a parent project.
 - Deleting a project is blocked if it has sub-projects or logs.
 - Closed projects are hidden by default; shown when "Show closed" toggle is on.
 - Projects can have category values assigned (see junction tables below).
-- `is_template` is fixed at creation time (not updatable). A sub-project always inherits its parent's flag at insert (enforced in `project_repo::insert`), so a template tree stays consistently marked. Template projects and their logs are excluded from the Home and Table view pages.
+- `is_template` is fixed at creation time (not updatable). A sub-project always inherits its parent's flag at insert (enforced in `project_repo::insert`), so a template tree stays consistently marked. Template projects and their logs are excluded from the Project view and Table view pages.
 
 ### Tables: `project_category_1`, `project_category_2`, `project_category_3`, `project_category_4`
 Junction tables for many-to-many category assignments on projects.
@@ -153,9 +153,9 @@ All blocks are enforced in the repository layer and surfaced as inline error tex
 
 ### Layout Overview
 
-The app has a global **navigation bar** at the very top (shared by every page via the layout): the book icon logo sits at the left edge, and a centered segmented tab control (`NavTabs.svelte`) switches between the views — **Home | Table view | Templates | Settings**. The active tab is highlighted as a solid accent-colored pill with white text; the strip background is a darker surface shade for contrast. New pages are added by appending to the `tabs` array in `NavTabs.svelte`.
+The app has a global **navigation bar** at the very top (shared by every page via the layout): the book icon logo sits at the left edge, and a centered segmented tab control (`NavTabs.svelte`) switches between the views — **Project view | Table view | Templates | Settings**. The active tab is highlighted as a solid accent-colored pill with white text; the strip background is a darker surface shade for contrast. New pages are added by appending to the `tabs` array in `NavTabs.svelte`.
 
-Below the navigation bar, the main (Home) screen is divided into four zones:
+Below the navigation bar, the main screen (**Project view**, the `/` route — historically "homepage") is divided into four zones:
 
 - **Menu bar (top)**: split into two groups.
   - **Left group**: "Show closed" toggle, project lookup, log type filter, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
@@ -177,7 +177,7 @@ A search-style lookup in the menu bar (replaces the old `<select>` dropdown). Be
 - **Click** the input → clears any active project filter and shows all projects in a floating dropdown, sorted A-Z with sub-projects indented (4 spaces per depth level) immediately below their parent.
 - **Type to filter** — token search, case-insensitive, order-independent (e.g. "api back" matches "Backend API"). The dropdown narrows in real time.
 - **Closed projects** are shown dimmed with a "Closed" pill so their status is immediately visible.
-- **Selecting a project** filters the main view to that project and its descendants.
+- **Selecting a project** filters the main view to that project and its descendants. Pressing **Enter** selects the first option in the dropdown; **Escape** closes it without selecting.
 - To clear the project filter, click the input again or use the **✕ Clear filters** button.
 
 Filter logic once a project is selected:
@@ -247,13 +247,15 @@ Each **project card** contains:
   - **Logs tab**: bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date ASC. Closed log rows are greyed out. Descriptions are always fully visible (no hover needed). The **Title** cell shows the log title, then a muted meta line below it reading `{log type} · Open since {N} days` (open logs only — "Open since today" / "1 day" / "N days", computed from the log's creation/start date; closed logs show just the log type), then any category badges. **Clicking anywhere on a log row opens the Log Editor** — with one exception: clicking a link inside the description opens that link in the browser instead.
   - **Links tab**: project links displayed as Confluence-style cards (chain icon + label), flowing horizontally with wrapping across the full width. Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
   - Each tab has an empty state ("No logs." / "No links — use ＋ Link to add one.").
-- Sub-projects rendered immediately below the body, at the next indent level.
+- Sub-projects rendered nested below the body: each sub-project is connected to its parent by **tree connector lines** (a vertical trunk plus an elbow into each child's header, colored like the project headers), making the hierarchy path visually explicit.
 
 The **＋ Sub-project** button opens the Project Editor pre-filled with the current project as the parent. The **＋ Link** button opens the **Link Editor** (slide-in panel, 400px wide) to add a labelled URL to the project. The **+** button opens a **type picker** dropdown (purple background, white text). Selecting a log type opens the Log Editor pre-filled with that type and the project.
 
 The log count badge always shows `open / total` (e.g. `2 / 5`). It is always visible next to the `+` button.
 
 Closed projects render at 55% opacity. The "Closed" pill appears in the header.
+
+Project header bars use a dedicated `--project-header` color (a clearly darker blue-grey in light mode, a lighter grey in dark mode) so they stand out from the page background; the tree connector lines use the same color.
 
 When a project has no logs to display:
 - **No filters active**: shows *"No logs yet — click + to add one."*
@@ -278,7 +280,9 @@ A flat table display of logs across all projects (formerly called "Deadlines" �
 | Deadline | Color-coded pill (see color rules below); blank if no due date |
 | Description | Full rich text, not truncated |
 
-Sorted by due date ASC (no due date → end of list). Descriptions are always fully expanded — no hover needed. Navigation back to the main view is via the **Home** tab in the navigation bar.
+Sorted by due date ASC (no due date → end of list); closed logs sort after open ones and render greyed out with no deadline color. Descriptions are always fully expanded — no hover needed.
+
+**Filters**: the Table view has the same filters as the Project view — the four category filters in a left sidebar (with the same inline label renaming), the project lookup, the log type dropdown, "Show closed", and "✕ Clear filters" — with identical matching semantics (AND logic, categories inherited from ancestor projects, project filter covering the selected subtree). One log-centric adaptation: here "Show closed" reveals closed **logs** (hidden by default). **Filter state is shared** between the Project view and the Table view via Svelte stores in `store.ts` (`showClosed`, `selCat1–4`, `selProject`, `selLogType`) — switching pages keeps the same filters applied. Filters reset on app restart (in-memory only).
 
 **Row click behavior** (same Log/Project editors as the main view, rendered on the page):
 - Clicking the **Project** column opens the **Project Editor** for the log's project.

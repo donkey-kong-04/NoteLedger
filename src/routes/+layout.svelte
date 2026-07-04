@@ -45,6 +45,7 @@
     --surface-hover:#dde0e8;
     --card-bg:      #ffffff;
     --border:       #e5e7eb;
+    --project-header: #ccd2dd;
     --bg:           #f3f4f6;
     height: 100vh;
     display: flex;
@@ -77,6 +78,7 @@
     --surface-hover:#4b5563;
     --card-bg:      #1f2937;
     --border:       #374151;
+    --project-header: #374151;
     --bg:           #111827;
   }
 </style>

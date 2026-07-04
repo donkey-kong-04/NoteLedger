@@ -6,7 +6,7 @@
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
   import LinkEditor from '$lib/components/LinkEditor.svelte';
-  import { settings, picklists, projects, logs, projectLinks, loadAll, saveSettings, pendingProjectFocus } from '$lib/store';
+  import { settings, picklists, projects, logs, projectLinks, loadAll, saveSettings, pendingProjectFocus, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { sortedProjectOptions } from '$lib/types';
   import { logMatchesSlot, computeVisibility } from '$lib/filters';
@@ -22,14 +22,6 @@
   let editorLinkProjectTitle: string = '';
   let showLinkEditor = false;
 
-  // Filter state
-  let showClosed = false;
-  let selCat1: number[] = [];
-  let selCat2: number[] = [];
-  let selCat3: number[] = [];
-  let selCat4: number[] = [];
-  let selProject: number | null = null;
-  let selLogType: number | null = null;
 
   // Fold/unfold all projects — broadcast to every ProjectCard via a bumped signal.
   let allCollapsed = false;
@@ -86,10 +78,10 @@
   $: cat4Vals = $picklists.filter(v => v.picklist_type === 'category_4').sort(byLabel);
 
   function clearAllFilters() {
-    selCat1 = []; selCat2 = []; selCat3 = []; selCat4 = [];
-    selProject = null;
-    selLogType = null;
-    showClosed = false;
+    $selCat1 = []; $selCat2 = []; $selCat3 = []; $selCat4 = [];
+    $selProject = null;
+    $selLogType = null;
+    $showClosed = false;
   }
 
   // ── Category matching (AND logic across all selected values) ─────────────
@@ -97,21 +89,21 @@
 
   // True when no filter that narrows the visible logs is active — used to decide
   // whether projects with no matching logs should still be shown.
-  $: noLogFilter = !selCat1.length && !selCat2.length && !selCat3.length && !selCat4.length
-    && selLogType === null;
+  $: noLogFilter = !$selCat1.length && !$selCat2.length && !$selCat3.length && !$selCat4.length
+    && $selLogType === null;
 
   $: matchingLogs = $logs.filter(l =>
-    (selLogType === null || l.type_id === selLogType) &&
-    logMatchesSlot(l, 1, selCat1, visProjects) &&
-    logMatchesSlot(l, 2, selCat2, visProjects) &&
-    logMatchesSlot(l, 3, selCat3, visProjects) &&
-    logMatchesSlot(l, 4, selCat4, visProjects)
+    ($selLogType === null || l.type_id === $selLogType) &&
+    logMatchesSlot(l, 1, $selCat1, visProjects) &&
+    logMatchesSlot(l, 2, $selCat2, visProjects) &&
+    logMatchesSlot(l, 3, $selCat3, visProjects) &&
+    logMatchesSlot(l, 4, $selCat4, visProjects)
   );
 
   // ── Project visibility ───────────────────────────────────────────────────
 
   $: ({ visible: visibleProjectIds, ancestorOnly: ancestorOnlyProjectIds } =
-    computeVisibility(visProjects, matchingLogs, selProject, showClosed, noLogFilter));
+    computeVisibility(visProjects, matchingLogs, $selProject, $showClosed, noLogFilter));
 
   $: topLevelProjects = visProjects.filter(p => p.parent_id == null);
   $: visibleTopLevelProjects = topLevelProjects.filter(p => visibleProjectIds.has(p.id));
@@ -123,8 +115,8 @@
   let lookupOpen = false;
   let lookupInput: HTMLInputElement;
 
-  $: selectedProjectLabel = selProject != null
-    ? (visProjects.find(p => p.id === selProject)?.title ?? '')
+  $: selectedProjectLabel = $selProject != null
+    ? (visProjects.find(p => p.id === $selProject)?.title ?? '')
     : '';
 
   $: filteredProjectOptions = (() => {
@@ -136,7 +128,7 @@
   })();
 
   function selectProject(id: number | null) {
-    selProject = id;
+    $selProject = id;
     lookupSearch = '';
     lookupOpen = false;
     lookupInput?.blur();
@@ -194,9 +186,9 @@
   // After creating a project or log, reveal it: clear category filters and
   // focus the project filter on it, so it doesn't vanish behind active filters.
   function focusOnProject(projectId: number) {
-    selCat1 = []; selCat2 = []; selCat3 = []; selCat4 = [];
-    selLogType = null;
-    selProject = projectId;
+    $selCat1 = []; $selCat2 = []; $selCat3 = []; $selCat4 = [];
+    $selLogType = null;
+    $selProject = projectId;
   }
 
   function onProjectCreated(e: CustomEvent<Project>) { focusOnProject(e.detail.id); }
@@ -215,7 +207,7 @@
   <header class="menu-bar">
     <div class="menu-left">
       <label class="toggle-wrap" title="Show closed projects">
-        <span class="toggle-switch" class:on={showClosed} on:click={() => showClosed = !showClosed} role="switch" aria-checked={showClosed} tabindex="0" on:keydown={e => e.key === ' ' && (showClosed = !showClosed)}>
+        <span class="toggle-switch" class:on={$showClosed} on:click={() => $showClosed = !$showClosed} role="switch" aria-checked={$showClosed} tabindex="0" on:keydown={e => e.key === ' ' && ($showClosed = !$showClosed)}>
           <span class="toggle-thumb"></span>
         </span>
         <span class="toggle-label">Show closed</span>
@@ -226,10 +218,11 @@
             bind:this={lookupInput}
             class="project-lookup-input"
             type="text"
-            placeholder={selProject != null ? selectedProjectLabel : 'Filter project…'}
+            placeholder={$selProject != null ? selectedProjectLabel : 'Filter project…'}
             bind:value={lookupSearch}
-            on:focus={() => { lookupOpen = true; lookupSearch = ''; selProject = null; }}
+            on:focus={() => { lookupOpen = true; lookupSearch = ''; $selProject = null; }}
             on:blur={onLookupBlur}
+            on:keydown={e => { if (e.key === 'Enter' && filteredProjectOptions.length > 0) selectProject(filteredProjectOptions[0].id); if (e.key === 'Escape') { lookupOpen = false; lookupSearch = ''; lookupInput?.blur(); } }}
           />
           {#if lookupOpen}
             <div class="lookup-dropdown">
@@ -254,7 +247,7 @@
         </div>
       {/if}
       {#if logTypes.length > 0}
-        <select class="logtype-filter" class:active={selLogType !== null} bind:value={selLogType} title="Filter by log type">
+        <select class="logtype-filter" class:active={$selLogType !== null} bind:value={$selLogType} title="Filter by log type">
           <option value={null}>All types</option>
           {#each logTypes as t (t.id)}
             <option value={t.id}>{t.label}</option>
@@ -272,19 +265,19 @@
   <div class="layout">
     <aside class="sidebar">
       <div class="sidebar-cat">
-        <CategoryFilter catType="category_1" bind:label={cat1Label} values={cat1Vals} bind:selected={selCat1} layout="vertical" on:labelChange={persistLabelChange} />
+        <CategoryFilter catType="category_1" bind:label={cat1Label} values={cat1Vals} bind:selected={$selCat1} layout="vertical" on:labelChange={persistLabelChange} />
       </div>
       <div class="sidebar-separator"></div>
       <div class="sidebar-cat">
-        <CategoryFilter catType="category_2" bind:label={cat2Label} values={cat2Vals} bind:selected={selCat2} layout="vertical" on:labelChange={persistLabelChange} />
+        <CategoryFilter catType="category_2" bind:label={cat2Label} values={cat2Vals} bind:selected={$selCat2} layout="vertical" on:labelChange={persistLabelChange} />
       </div>
       <div class="sidebar-separator"></div>
       <div class="sidebar-cat">
-        <CategoryFilter catType="category_3" bind:label={cat3Label} values={cat3Vals} bind:selected={selCat3} layout="vertical" on:labelChange={persistLabelChange} />
+        <CategoryFilter catType="category_3" bind:label={cat3Label} values={cat3Vals} bind:selected={$selCat3} layout="vertical" on:labelChange={persistLabelChange} />
       </div>
       <div class="sidebar-separator"></div>
       <div class="sidebar-cat">
-        <CategoryFilter catType="category_4" bind:label={cat4Label} values={cat4Vals} bind:selected={selCat4} layout="vertical" on:labelChange={persistLabelChange} />
+        <CategoryFilter catType="category_4" bind:label={cat4Label} values={cat4Vals} bind:selected={$selCat4} layout="vertical" on:labelChange={persistLabelChange} />
       </div>
     </aside>
 
@@ -300,7 +293,7 @@
             allLinks={$projectLinks}
             {visibleProjectIds}
             {ancestorOnlyProjectIds}
-            {showClosed}
+            showClosed={$showClosed}
             {collapseSignal}
             collapseAll={allCollapsed}
             depth={0}
@@ -369,6 +362,7 @@
     --surface-hover:#dde0e8;
     --card-bg:      #ffffff;
     --border:       #e5e7eb;
+    --project-header: #ccd2dd;
     background: var(--surface-2);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -398,6 +392,7 @@
     --surface-hover:#4b5563;
     --card-bg:      #1f2937;
     --border:       #374151;
+    --project-header: #374151;
   }
 
   .layout {

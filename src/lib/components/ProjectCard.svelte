@@ -49,8 +49,6 @@
     if (e.key === 'Escape') showTypePicker = false;
   }
 
-  const INDENT = 24; // px per depth level
-
   $: ownLogs = allLogs
     .filter(l => Number(l.project_id) === Number(project.id))
     .sort((a, b) => {
@@ -91,8 +89,10 @@
   $: ownLinks = allLinks.filter(l => l.project_id === project.id);
 </script>
 
-<!-- Project header row -->
-<div class="project-block" class:closed={project.is_closed} style="margin-left: {depth * INDENT}px">
+<!-- The node wraps the card and its sub-tree so connector lines can be drawn
+     between a parent and each of its children. -->
+<div class="node">
+<div class="project-block" class:closed={project.is_closed}>
   <div class="project-header" style="padding-left: 10px">
     <button class="chevron" class:collapsed on:click={() => collapsed = !collapsed} aria-label="Toggle">
       <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -234,28 +234,66 @@
   {/if}
 </div>
 
-<!-- Sub-projects rendered at same DOM level, just deeper indent -->
-{#if !collapsed}
-  {#each visibleSubProjects as sub (sub.id)}
-    <svelte:self
-      project={sub}
-      subProjects={allProjects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(sub.id))}
-      {allLogs} {allLogsTotal} {allProjects} {allLinks}
-      {visibleProjectIds} {ancestorOnlyProjectIds} {showClosed}
-      {collapseSignal} {collapseAll}
-      depth={depth + 1}
-      {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
-      on:edit
-      on:editProject
-      on:newLogInProject
-      on:newSubProject
-      on:newLink
-      on:editLink
-    />
-  {/each}
+{#if !collapsed && visibleSubProjects.length > 0}
+  <div class="sub-tree">
+    {#each visibleSubProjects as sub (sub.id)}
+      <svelte:self
+        project={sub}
+        subProjects={allProjects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(sub.id))}
+        {allLogs} {allLogsTotal} {allProjects} {allLinks}
+        {visibleProjectIds} {ancestorOnlyProjectIds} {showClosed}
+        {collapseSignal} {collapseAll}
+        depth={depth + 1}
+        {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
+        on:edit
+        on:editProject
+        on:newLogInProject
+        on:newSubProject
+        on:newLink
+        on:editLink
+      />
+    {/each}
+  </div>
 {/if}
+</div>
 
 <style>
+  .node { position: relative; }
+
+  /* Sub-projects: indented under the parent, with tree connector lines
+     (vertical trunk + an elbow into each child's header). */
+  .sub-tree {
+    position: relative;
+    margin-left: 14px;
+    padding-left: 18px;
+    display: flex;
+    flex-direction: column;
+  }
+  .sub-tree > :global(.node) { padding-top: var(--sp-card-gap, 12px); }
+  /* Elbow into the child's header */
+  .sub-tree > :global(.node)::before {
+    content: '';
+    position: absolute;
+    left: -18px;
+    top: calc(var(--sp-card-gap, 12px) + 18px);
+    width: 16px;
+    border-top: 2px solid var(--project-header, var(--surface-3));
+  }
+  /* Vertical trunk — runs the full height so it reaches the next sibling… */
+  .sub-tree > :global(.node)::after {
+    content: '';
+    position: absolute;
+    left: -18px;
+    top: 0;
+    bottom: 0;
+    border-left: 2px solid var(--project-header, var(--surface-3));
+  }
+  /* …but stops at the elbow on the last child. */
+  .sub-tree > :global(.node:last-child)::after {
+    bottom: auto;
+    height: calc(var(--sp-card-gap, 12px) + 19px);
+  }
+
   .project-block {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -266,7 +304,7 @@
   .project-header {
     display: flex; align-items: center; gap: 8px;
     padding-top: 7px; padding-bottom: 7px; padding-right: 10px;
-    background: var(--surface-2);
+    background: var(--project-header, var(--surface-3));
     border-radius: 7px 7px 0 0;
     min-height: 36px;
   }

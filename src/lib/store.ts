@@ -20,6 +20,16 @@ export const projectLinks = writable<ProjectLink[]>([]);
 // focus the project filter on this project (used after cloning a template).
 export const pendingProjectFocus = writable<number | null>(null);
 
+// Filter state, shared between the Home and Table views so switching pages
+// keeps the same filters applied.
+export const showClosed = writable(false);
+export const selCat1 = writable<number[]>([]);
+export const selCat2 = writable<number[]>([]);
+export const selCat3 = writable<number[]>([]);
+export const selCat4 = writable<number[]>([]);
+export const selProject = writable<number | null>(null);
+export const selLogType = writable<number | null>(null);
+
 export async function loadAll() {
   const [s, p, pr, l, pl] = await Promise.all([
     invoke<UserSettings>('get_settings'),
