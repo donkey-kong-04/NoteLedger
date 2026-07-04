@@ -55,8 +55,23 @@ export interface Log {
 
 import { openUrl } from '@tauri-apps/plugin-opener';
 
+// Only schemes that are safe to hand to the OS. Stored links and hrefs inside
+// description HTML are user data, so anything else (file:, smb:, etc.) is refused.
+const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
+
 export async function openLink(url: string) {
-  await openUrl(url);
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    console.warn('openLink: not a valid URL, refusing to open:', url);
+    return;
+  }
+  if (!SAFE_PROTOCOLS.has(parsed.protocol)) {
+    console.warn('openLink: blocked non-http(s)/mailto URL:', url);
+    return;
+  }
+  await openUrl(parsed.href);
 }
 
 export function handleLinkClick(e: MouseEvent) {

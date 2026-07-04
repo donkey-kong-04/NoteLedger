@@ -1,6 +1,7 @@
 <script lang="ts">
   import Badge from './Badge.svelte';
   import { deadlineColor, contrastText, CAT_COLORS, handleLinkClick } from '../types';
+  import { sanitizeHtml } from '../sanitize';
   import type { Log, PicklistValue } from '../types';
   import { createEventDispatcher } from 'svelte';
 
@@ -22,7 +23,7 @@
     ...log.category4_ids.map(id => ({ val: cat4Vals.find(v => v.id === id), type: 'category_4' })),
   ].filter(x => x.val) as { val: PicklistValue; type: string }[];
 
-  $: descPreview = log.description ?? '';
+  $: descPreview = sanitizeHtml(log.description ?? '');
   $: dlColor = log.due_date ? deadlineColor(log.due_date) : null;
   $: dlText = dlColor ? contrastText(dlColor) : '#fff';
 

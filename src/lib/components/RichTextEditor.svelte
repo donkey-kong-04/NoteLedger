@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { handleLinkClick } from '../types';
+  import { sanitizeHtml } from '../sanitize';
 
   export let value: string = '';
 
@@ -20,7 +21,7 @@
   ];
 
   onMount(() => {
-    if (editor && value) editor.innerHTML = value;
+    if (editor && value) editor.innerHTML = sanitizeHtml(value);
     document.execCommand('styleWithCSS', false, 'true');
   });
 
@@ -58,7 +59,7 @@
   }
 
   function syncValue() {
-    value = editor.innerHTML;
+    value = sanitizeHtml(editor.innerHTML);
   }
 
   function updateActive() {
@@ -89,10 +90,19 @@
   function onPaste(e: ClipboardEvent) {
     const text = e.clipboardData?.getData('text/plain') ?? '';
     const html = e.clipboardData?.getData('text/html') ?? '';
-    if (!html && /^https?:\/\/\S+$/.test(text.trim())) {
+    if (html) {
       e.preventDefault();
-      const url = text.trim();
-      document.execCommand('insertHTML', false, `<a href="${url}">${url}</a>`);
+      document.execCommand('insertHTML', false, sanitizeHtml(html));
+      syncValue();
+      return;
+    }
+    if (/^https?:\/\/\S+$/.test(text.trim())) {
+      e.preventDefault();
+      // Build the anchor via DOM so the URL is attribute-escaped when serialized.
+      const a = document.createElement('a');
+      a.href = text.trim();
+      a.textContent = text.trim();
+      document.execCommand('insertHTML', false, a.outerHTML);
       syncValue();
     }
   }
