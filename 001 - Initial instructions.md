@@ -36,7 +36,7 @@ The application is developed using:
 # Data Model
 
 ### DB Migration versioning
-Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **9** (tracked by `schema::LATEST_VERSION`).
+Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **10** (tracked by `schema::LATEST_VERSION`).
 
 Before any pending migration runs, `db::open` copies the existing database file to `note_ledger.db.backup-v{N}-{timestamp}` as a safety net. This is skipped for a brand-new database or one already at the latest version.
 
@@ -75,6 +75,7 @@ A project groups logs together and can be nested under a parent project.
 | description | TEXT | Yes | NULL | Optional description |
 | parent_id | INTEGER | Yes | NULL | FK → projects.id (self-referencing, for nesting) |
 | is_closed | BOOLEAN | No | FALSE | Whether the project is closed |
+| is_template | BOOLEAN | No | FALSE | Template projects live on the Templates page only (v10) |
 | start_date | TEXT | Yes | NULL | Optional start date (ISO 8601, no logic enforced) |
 | end_date | TEXT | Yes | NULL | Optional end date (ISO 8601, no logic enforced) |
 
@@ -83,6 +84,7 @@ A project groups logs together and can be nested under a parent project.
 - Deleting a project is blocked if it has sub-projects or logs.
 - Closed projects are hidden by default; shown when "Show closed" toggle is on.
 - Projects can have category values assigned (see junction tables below).
+- `is_template` is fixed at creation time (not updatable). A sub-project always inherits its parent's flag at insert (enforced in `project_repo::insert`), so a template tree stays consistently marked. Template projects and their logs are excluded from the Home and Table view pages.
 
 ### Tables: `project_category_1`, `project_category_2`, `project_category_3`, `project_category_4`
 Junction tables for many-to-many category assignments on projects.
@@ -104,7 +106,7 @@ Labelled URLs attached to a project.
 | label | TEXT | No | — | Display label shown on the link card |
 | url | TEXT | No | — | Full URL (e.g. `https://…`) |
 
-Links are displayed in the project card's 20% links panel (visible only when at least one link exists). Clicking opens the URL in the system default browser.
+Links are displayed in the project card's **Links tab** (see project card body tabs). Clicking opens the URL in the system default browser.
 
 ### Table: `logs`
 A single log entry.
@@ -145,25 +147,27 @@ To keep the record intact, the structural entities are protected from deletion s
 | Log type | no log uses it | any log is of that type |
 | Category value | no log **and** no project uses it | any log or project has it assigned |
 
-All blocks are enforced in the repository layer and surfaced as inline error text in the relevant editor (Project Editor / Settings panel).
+All blocks are enforced in the repository layer and surfaced as inline error text in the relevant editor (Project Editor / Settings page).
 
 ## User Interface
 
 ### Layout Overview
 
-The main screen is divided into four zones:
+The app has a global **navigation bar** at the very top (shared by every page via the layout): the book icon logo sits at the left edge, and a centered segmented tab control (`NavTabs.svelte`) switches between the views — **Home | Table view | Templates | Settings**. The active tab is highlighted as a solid accent-colored pill with white text; the strip background is a darker surface shade for contrast. New pages are added by appending to the `tabs` array in `NavTabs.svelte`.
+
+Below the navigation bar, the main (Home) screen is divided into four zones:
 
 - **Menu bar (top)**: split into two groups.
-  - **Left group**: Book icon logo, "Show closed" toggle, project lookup, log type filter, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
-  - **Right group** (`nav`): **"Fold all / Unfold all"** toggle button, **"Deadlines"** link (navigates to the Deadlines page), "+ New Project" button, settings gear (⚙️). No dark mode toggle here — it lives only in Settings.
+  - **Left group**: "Show closed" toggle, project lookup, log type filter, "✕ Clear filters" button — all grouped tightly together (not spread across the bar).
+  - **Right group** (`nav`): **"Fold all / Unfold all"** toggle button, "+ New Project" button. No dark mode toggle here — it lives only in Settings.
 - **Left sidebar (230px)**: All four category filters stacked vertically (Category 1 → 2 → 3 → 4), each separated by a horizontal rule. Each section is independently scrollable.
 - **Main area**: Project cards in a vertical tree list (full width).
 
-All spacing in the menu bar, sidebar, main grid, log/project cards, settings modal, and log/project editors is controlled by the **Layout density** setting (see Settings Panel).
+All spacing in the menu bar, sidebar, main grid, log/project cards, settings page, and log/project editors is controlled by the **Layout density** setting (see Settings Page).
 
 ### Show Closed Toggle
 
-A toggle switch in the top-left of the menu bar (next to the logo) labelled **"Show closed"**:
+A toggle switch in the top-left of the menu bar labelled **"Show closed"**:
 - **Off (default)**: closed **projects** are hidden. Closed **logs** are always shown inside visible projects (greyed out at 60% opacity).
 - **On**: closed projects are also visible (rendered at 55% opacity). Closed logs remain visible in all cases.
 
@@ -190,9 +194,9 @@ A **basic single-select dropdown** in the menu bar (left group, next to the proj
 
 A **"✕ Clear filters"** button sits in the menu bar's left group, next to the project filter dropdown. It is **always visible** (not conditional) — clicking it resets all filters (categories, project, show-closed) at once. Always-visible by design: users tend to click it by default just to reassure themselves nothing is filtered.
 
-### Settings Panel (⚙️)
+### Settings Page
 
-A **centered modal** (80vw × 80vh, rounded corners) with a left-side section nav and content area on the right — not a slide-in panel. Sections:
+A **full page** at `/settings`, reached via the **Settings** tab in the navigation bar (no longer a modal or gear button). Same design as before the conversion: a page header, a left-side section nav, and a content area on the right. Sections:
 1. **Appearance** — dark/light mode toggle; **Layout density** picklist (Compact / Normal / Comfortable) controlling spacing app-wide
 2. **Category Labels** — rename the 4 category labels
 3. **Log Types** — add, rename, delete log types (delete blocked if logs use it)
@@ -218,6 +222,8 @@ All four categories are always visible, acting as quick filters.
 - When "Show closed" is off, closed projects are hidden regardless of other filters
 - When a project is selected in the dropdown with no category filter active, all descendant projects are shown (including closed ones)
 
+**Filters after creation:** creating a new project or log auto-adjusts the filters so the new item is immediately visible (instead of vanishing behind active filters): all category filters and the log type filter are cleared, and the project filter is set to the new project (or, for a log, the project it belongs to). This happens only on creation — editing an existing item leaves the filters untouched.
+
 | Category | Position | Arrangement | Color |
 |---|---|---|---|
 | Category 1 | Left sidebar, top | Values horizontal, wrapping | Indigo `#6366f1` |
@@ -233,13 +239,14 @@ Badge style:
 
 Projects are displayed as a vertical tree list (not a grid). Each level of nesting is indented 24px to the right relative to its parent, giving a visual hierarchy without drawing tree lines.
 
-The **"Fold all / Unfold all"** button in the menu bar collapses every project card (including nested sub-projects) to its header in one click, then toggles to expand them all again. Individual cards can still be folded/unfolded via their chevron in between — the button re-broadcasts the global state on each press.
+The **"Fold all / Unfold all"** button in the menu bar collapses every project card (including nested sub-projects) to its header in one click, then toggles to expand them all again. Individual cards can still be folded/unfolded via their chevron in between — the button re-broadcasts the global state on each press. While "Fold all" is active, expanding a project via its chevron reveals only that project's logs and its immediate sub-project headers — the sub-projects themselves stay folded (they inherit the global fold state when revealed) and must be expanded individually.
 
 Each **project card** contains:
 - **Header row**: collapse chevron | project title (clickable → opens Project Editor) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button
-- **Body** (80% / 20% split when links exist):
-  - **Log table** (80%, if logs exist): bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date ASC. Closed log rows are greyed out. Descriptions are always fully visible (no hover needed). The **Title** cell shows the log title, then a muted meta line below it reading `{log type} · Open since {N} days` (open logs only — "Open since today" / "1 day" / "N days", computed from the log's creation/start date; closed logs show just the log type), then any category badges.
-  - **Links panel** (20%, if links exist): list of project links displayed as Confluence-style cards (chain icon + label). Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
+- **Body** (shown when the project has logs or links): a full-width **Logs | Links** tab bar — same segmented design as the page navigation (active tab = solid accent pill, white text), each tab showing a count pill. **Logs** is the default selection. The tab choice is per-card and resets to Logs when the card is re-rendered (e.g. after folding). Sub-projects are NOT part of the tabs — they render below the card regardless of the selected tab.
+  - **Logs tab**: bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date ASC. Closed log rows are greyed out. Descriptions are always fully visible (no hover needed). The **Title** cell shows the log title, then a muted meta line below it reading `{log type} · Open since {N} days` (open logs only — "Open since today" / "1 day" / "N days", computed from the log's creation/start date; closed logs show just the log type), then any category badges. **Clicking anywhere on a log row opens the Log Editor** — with one exception: clicking a link inside the description opens that link in the browser instead.
+  - **Links tab**: project links displayed as Confluence-style cards (chain icon + label), flowing horizontally with wrapping across the full width. Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
+  - Each tab has an empty state ("No logs." / "No links — use ＋ Link to add one.").
 - Sub-projects rendered immediately below the body, at the next indent level.
 
 The **＋ Sub-project** button opens the Project Editor pre-filled with the current project as the parent. The **＋ Link** button opens the **Link Editor** (slide-in panel, 400px wide) to add a labelled URL to the project. The **+** button opens a **type picker** dropdown (purple background, white text). Selecting a log type opens the Log Editor pre-filled with that type and the project.
@@ -260,20 +267,26 @@ Fields:
 
 The project name is shown as a subtitle below the panel title. Supports create, edit, and delete. Links open in the system default browser via `opener:allow-default-urls`.
 
-### Deadlines Page
+### Table View Page
 
-Accessible via the **"Deadlines"** button in the top-right menu bar. Shows a read-only table of all **open logs** (closed logs excluded), with columns:
+A flat table display of logs across all projects (formerly called "Deadlines" — renamed because deadlines are also visible on the homepage; what distinguishes this page is the flat table layout). Accessible via the **"Table view"** tab in the navigation bar, at the `/table` route. Shows all **open logs** (closed logs excluded), with columns:
 
 | Column | Notes |
 |---|---|
 | Project | Full project path (ancestors joined with `›`); category badges assigned to the project shown below the path |
-| Log | Log title; a muted `{log type} · Open since {N} days` meta line below it (all deadline-page logs are open); category badges assigned to the log shown below that |
+| Log | Log title; a muted `{log type} · Open since {N} days` meta line below it (all table-view logs are open); category badges assigned to the log shown below that |
 | Deadline | Color-coded pill (see color rules below); blank if no due date |
 | Description | Full rich text, not truncated |
 
-Sorted by due date ASC (no due date → end of list). Descriptions are always fully expanded — no hover needed. A **← Back** link returns to the main view.
+Sorted by due date ASC (no due date → end of list). Descriptions are always fully expanded — no hover needed. Navigation back to the main view is via the **Home** tab in the navigation bar.
 
-**Deadline color rules** (applied in both the project card log table and the Deadlines page; closed logs are never color-coded):
+**Row click behavior** (same Log/Project editors as the main view, rendered on the page):
+- Clicking the **Project** column opens the **Project Editor** for the log's project.
+- Clicking **anywhere else on the row** opens the **Log Editor** for that log.
+- Exception: clicking a link inside the description opens the link in the browser instead of the editor.
+- Edits are reflected in the table immediately after save; closing a log from the editor removes it from the list (only open logs are shown).
+
+**Deadline color rules** (applied in both the project card log table and the Table view page; closed logs are never color-coded):
 
 | Color | Condition |
 |---|---|
@@ -281,6 +294,21 @@ Sorted by due date ASC (no due date → end of list). Descriptions are always fu
 | 🟡 Yellow | Due date falls in next calendar week (Mon–Sun) |
 | 🟢 Green | Due date is beyond next week |
 | — | No due date, or log is closed |
+
+### Templates Page
+
+At `/templates`, via the **Templates** tab. Behaves like the homepage — same project cards (Logs/Links tabs, fold all, ＋ Sub-project / ＋ Link / + log buttons, editors), "+ New Template" button — **except there are no filters** (no sidebar, no project lookup, no log type filter, no show-closed toggle; closed template content is always visible). Only **template projects** (`is_template = 1`) are shown here, and they appear nowhere else in the app.
+
+**Cloning**: top-level template cards have an accent **⧉ Clone** button. It opens a small dialog asking for the new project's title (pre-filled with the template's title). Confirming deep-copies the entire tree — logs, links, sub-projects, and their logs/links recursively (`clone_project` command → `project_repo::clone_tree`). The copy:
+- is a **regular project** (never a template) that appears on the homepage;
+- is **fully independent** — later edits to the template never affect projects cloned from it, and vice versa;
+- after cloning, the app navigates to the homepage with all filters cleared and the project filter set to the new project (handed off via the `pendingProjectFocus` store).
+
+**Date re-anchoring on clone** (template dates are typically in the past):
+- **Log due dates** shift as a group: the earliest due date anywhere in the template tree lands on **today**, all others keep their relative distance (e.g. today 04/07: logs due 01/06, 04/06, 07/06 become 04/07, 07/07, 10/07). Logs without a due date stay empty.
+- **Log start dates** ("Open since") reset to today.
+- **Project start dates** become today; **end dates** shift by the same per-project amount so planned duration is preserved. An end date without a start date falls back to the global log shift.
+- Closed state / closed dates are copied unchanged; the template's own dates are untouched.
 
 ### Log Editor (slide-in panel, 780px wide)
 

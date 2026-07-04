@@ -17,6 +17,8 @@
   export let collapseSignal: number = 0;
   export let collapseAll: boolean = false;
   export let allLinks: ProjectLink[] = [];
+  // Templates page: shows a Clone button on top-level template cards.
+  export let showCloneButton: boolean = false;
   export let logTypes: PicklistValue[];
   export let cat1Vals: PicklistValue[];
   export let cat2Vals: PicklistValue[];
@@ -24,8 +26,11 @@
   export let cat4Vals: PicklistValue[];
 
   const dispatch = createEventDispatcher();
-  let collapsed = false;
+  // Sub-project cards unmount while their parent is folded; start from the
+  // global fold state so they come back folded after a "Fold all".
+  let collapsed = collapseAll;
   let showTypePicker = false;
+  let activeTab: 'logs' | 'links' = 'logs';
 
   // Apply a global fold/unfold only when the signal changes — leaves the local
   // chevron toggle untouched in between.
@@ -109,6 +114,9 @@
       <span class="closed-pill">Closed</span>
     {/if}
     <span class="count-badge">{countLabel}</span>
+    {#if showCloneButton}
+      <button class="clone-btn" on:click={() => dispatch('cloneProject', project)} title="Clone this template into a new project">⧉ Clone</button>
+    {/if}
     <button class="sub-btn" on:click={() => dispatch('newSubProject', project)} title="New sub-project">＋ Sub-project</button>
     <button class="sub-btn" on:click={() => dispatch('newLink', project)} title="Add link">＋ Link</button>
     <div class="add-wrap">
@@ -125,10 +133,19 @@
   </div>
 
   {#if !collapsed}
-    <!-- Body: log table (80%) + links panel (20%) -->
+    <!-- Body: Logs / Links tabs (sub-projects are outside, always visible) -->
     {#if (ownLogs.length > 0 || ownLinks.length > 0) && !ancestorOnlyProjectIds.has(project.id)}
-      <div class="card-body" class:has-links={ownLinks.length > 0}>
-        <!-- Log table — hidden for ancestor-context projects -->
+      <div class="card-body">
+        <div class="body-tabs">
+          <button class="body-tab" class:active={activeTab === 'logs'} on:click={() => activeTab = 'logs'}>
+            Logs {#if ownLogs.length > 0}<span class="tab-count">{ownLogs.length}</span>{/if}
+          </button>
+          <button class="body-tab" class:active={activeTab === 'links'} on:click={() => activeTab = 'links'}>
+            Links {#if ownLinks.length > 0}<span class="tab-count">{ownLinks.length}</span>{/if}
+          </button>
+        </div>
+
+        {#if activeTab === 'logs'}
         {#if ownLogs.length > 0}
           <div class="log-table-wrap">
             <table class="log-table">
@@ -173,7 +190,7 @@
                     </td>
                     <td class="col-desc">
                       {#if log.description}
-                        <div class="log-desc" on:click|stopPropagation={handleLinkClick}>{@html log.description}</div>
+                        <div class="log-desc" on:click={handleLinkClick}>{@html log.description}</div>
                       {/if}
                     </td>
                   </tr>
@@ -181,9 +198,10 @@
               </tbody>
             </table>
           </div>
+        {:else}
+          <p class="tab-empty">No logs.</p>
         {/if}
-
-        <!-- Links panel -->
+        {:else}
         {#if ownLinks.length > 0}
           <div class="links-panel">
             {#each ownLinks as link (link.id)}
@@ -199,6 +217,9 @@
               </div>
             {/each}
           </div>
+        {:else}
+          <p class="tab-empty">No links — use ＋ Link to add one.</p>
+        {/if}
         {/if}
       </div>
     {/if}
@@ -291,6 +312,15 @@
     transition: color 0.15s, border-color 0.15s;
   }
   .sub-btn:hover { color: var(--text); border-color: var(--text-muted); }
+
+  .clone-btn {
+    font-size: 11px; font-weight: 600; color: #fff;
+    background: var(--accent); border: 1.5px solid var(--accent);
+    border-radius: 999px; padding: 2px 10px;
+    cursor: pointer; font-family: inherit; flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+  .clone-btn:hover { opacity: 0.85; }
 
   .add-wrap { position: relative; flex-shrink: 0; }
 
@@ -391,21 +421,54 @@
     box-sizing: border-box;
   }
 
-  /* 80/20 body layout */
   .card-body {
     display: flex;
-    align-items: stretch;
+    flex-direction: column;
   }
-  .card-body .log-table-wrap { flex: 1; min-width: 0; }
-  .card-body.has-links .log-table-wrap { flex: 0 0 80%; }
+  .card-body .log-table-wrap { min-width: 0; }
 
-  /* Links panel */
+  /* Logs / Links tabs — same segmented design as the page nav, stretched full width */
+  .body-tabs {
+    display: flex;
+    background: var(--surface-3);
+    border-bottom: 1px solid var(--border);
+    padding: 3px;
+    gap: 3px;
+  }
+  .body-tab {
+    flex: 1;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    background: none; border: none; cursor: pointer; font-family: inherit;
+    font-size: 12px; font-weight: 600;
+    color: var(--text-muted);
+    padding: 5px 0;
+    border-radius: 7px;
+    transition: background 0.15s, color 0.15s;
+  }
+  .body-tab:hover { color: var(--text); background: var(--surface-hover); }
+  .body-tab.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+  .body-tab.active:hover { color: #fff; background: var(--accent); }
+  .tab-count {
+    font-size: 10px; font-weight: 700;
+    background: var(--surface); color: var(--text-muted);
+    border-radius: 999px; padding: 0 6px; line-height: 14px;
+  }
+  .body-tab.active .tab-count { background: rgba(255,255,255,0.25); color: #fff; }
+
+  .tab-empty {
+    margin: 0; padding: 10px 14px;
+    font-size: 12px; color: var(--text-muted);
+  }
+
+  /* Links panel — full-width row of link cards, wrapping */
   .links-panel {
-    flex: 0 0 20%;
-    border-left: 1px solid var(--border);
     padding: 6px 8px;
     display: flex;
-    flex-direction: column;
+    flex-wrap: wrap;
     gap: 4px;
     min-width: 0;
   }

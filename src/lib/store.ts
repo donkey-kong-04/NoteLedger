@@ -16,6 +16,10 @@ export const projects = writable<Project[]>([]);
 export const logs = writable<Log[]>([]);
 export const projectLinks = writable<ProjectLink[]>([]);
 
+// Set before navigating to the homepage to have it clear its filters and
+// focus the project filter on this project (used after cloning a template).
+export const pendingProjectFocus = writable<number | null>(null);
+
 export async function loadAll() {
   const [s, p, pr, l, pl] = await Promise.all([
     invoke<UserSettings>('get_settings'),
@@ -32,9 +36,10 @@ export async function loadAll() {
 }
 
 export async function createProject(project: Omit<Project, 'id'>) {
-  await invoke<Project>('create_project', { project: { ...project, id: 0, category1_ids: project.category1_ids ?? [], category2_ids: project.category2_ids ?? [], category3_ids: project.category3_ids ?? [], category4_ids: project.category4_ids ?? [] } });
+  const created = await invoke<Project>('create_project', { project: { ...project, id: 0, category1_ids: project.category1_ids ?? [], category2_ids: project.category2_ids ?? [], category3_ids: project.category3_ids ?? [], category4_ids: project.category4_ids ?? [] } });
   const fresh = await invoke<Project[]>('get_projects');
   projects.set(fresh);
+  return created;
 }
 
 export async function updateProject(project: Project) {
@@ -51,6 +56,21 @@ export async function deleteProject(id: number) {
   ]);
   projects.set(freshP);
   logs.set(freshL);
+}
+
+// Deep-copies a template project tree (logs, links, sub-projects) into a
+// fully independent non-template project. Returns the new root project id.
+export async function cloneProject(id: number, newTitle: string): Promise<number> {
+  const newId = await invoke<number>('clone_project', { id, newTitle });
+  const [freshP, freshL, freshLinks] = await Promise.all([
+    invoke<Project[]>('get_projects'),
+    invoke<Log[]>('get_logs'),
+    invoke<ProjectLink[]>('get_project_links'),
+  ]);
+  projects.set(freshP);
+  logs.set(freshL);
+  projectLinks.set(freshLinks);
+  return newId;
 }
 
 export async function saveSettings(s: UserSettings) {
@@ -91,9 +111,10 @@ export async function deleteProjectLink(id: number) {
 }
 
 export async function createLog(log: Omit<Log, 'id' | 'start_date' | 'closed_date'>) {
-  await invoke<Log>('create_log', { log: { ...log, id: 0, start_date: '', closed_date: null, project_id: log.project_id, category1_ids: log.category1_ids ?? [], category2_ids: log.category2_ids ?? [], category3_ids: log.category3_ids ?? [], category4_ids: log.category4_ids ?? [] } });
+  const created = await invoke<Log>('create_log', { log: { ...log, id: 0, start_date: '', closed_date: null, project_id: log.project_id, category1_ids: log.category1_ids ?? [], category2_ids: log.category2_ids ?? [], category3_ids: log.category3_ids ?? [], category4_ids: log.category4_ids ?? [] } });
   const fresh = await invoke<Log[]>('get_logs');
   logs.set(fresh);
+  return created;
 }
 
 export async function updateLog(log: Log) {

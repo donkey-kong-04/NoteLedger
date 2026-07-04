@@ -15,6 +15,9 @@
   export let cat2Label: string = 'Category 2';
   export let cat3Label: string = 'Category 3';
   export let cat4Label: string = 'Category 4';
+  // New projects created from the Templates page are templates; sub-projects
+  // inherit the parent's flag server-side regardless.
+  export let isTemplate: boolean = false;
 
   const dispatch = createEventDispatcher();
   const isNew = !project || project.id === 0;
@@ -25,7 +28,7 @@
     category2_ids: [...(project.category2_ids ?? [])],
     category3_ids: [...(project.category3_ids ?? [])],
     category4_ids: [...(project.category4_ids ?? [])],
-  } : { id: 0, title: '', description: '', parent_id: null, is_closed: false, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
+  } : { id: 0, title: '', description: '', parent_id: null, is_closed: false, is_template: isTemplate, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
 
   let confirmDelete = false;
   let error = '';
@@ -83,8 +86,10 @@
     await pendingAdd;
     error = '';
     try {
-      if (isNew) { await createProject(draft); }
-      else { await updateProject(draft); }
+      if (isNew) {
+        const created = await createProject(draft);
+        dispatch('created', created);
+      } else { await updateProject(draft); }
       dispatch('close');
     } catch (e: any) { error = String(e); }
   }

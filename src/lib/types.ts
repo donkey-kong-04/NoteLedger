@@ -21,6 +21,7 @@ export interface Project {
   description: string;
   parent_id: number | null;
   is_closed: boolean;
+  is_template: boolean;
   start_date: string | null;
   end_date: string | null;
   category1_ids: number[];

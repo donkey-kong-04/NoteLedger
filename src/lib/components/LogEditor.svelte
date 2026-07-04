@@ -55,7 +55,8 @@
     await pendingAdd;
     draft.due_date = dueDateStr || null;
 if (isNew) {
-      await createLog(draft);
+      const created = await createLog(draft);
+      dispatch('created', created);
     } else {
       await updateLog(draft);
     }

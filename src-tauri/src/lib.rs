@@ -83,6 +83,12 @@ fn delete_project(state: State<AppState>, id: i64) -> Result<(), String> {
     db::project_repo::delete(&conn, id).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+fn clone_project(state: State<AppState>, id: i64, new_title: String) -> Result<i64, String> {
+    let conn = state.0.lock().unwrap();
+    db::project_repo::clone_tree(&conn, id, &new_title).map_err(|e| e.to_string())
+}
+
 // ── Project Links ─────────────────────────────────────────────────────────────
 
 #[tauri::command]
@@ -165,7 +171,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_settings, save_settings,
             get_all_picklists, create_picklist_value, update_picklist_value, delete_picklist_value,
-            get_projects, create_project, update_project, delete_project,
+            get_projects, create_project, update_project, delete_project, clone_project,
             get_project_links, create_project_link, update_project_link, delete_project_link,
             get_logs, create_log, update_log, delete_log,
         ])

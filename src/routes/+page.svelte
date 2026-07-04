@@ -6,51 +6,15 @@
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
   import LinkEditor from '$lib/components/LinkEditor.svelte';
-  import SettingsPanel from '$lib/components/SettingsPanel.svelte';
-  import { settings, picklists, projects, logs, projectLinks, loadAll, saveSettings } from '$lib/store';
+  import { settings, picklists, projects, logs, projectLinks, loadAll, saveSettings, pendingProjectFocus } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { sortedProjectOptions } from '$lib/types';
   import { logMatchesSlot, computeVisibility } from '$lib/filters';
+  import { densityStyle as densityStyleFor } from '$lib/density';
 
-  const DENSITY_VARS: Record<string, Record<string, string>> = {
-    compact: {
-      '--sp-main-pad': '10px',
-      '--sp-card-gap': '6px',
-      '--sp-sidebar-pad': '8px',
-      '--sp-topcat-pad': '6px 10px',
-      '--sp-card-pad': '8px 10px',
-      '--sp-card-gap-inner': '4px',
-      '--sp-panel-pad': '14px',
-      '--sp-panel-gap': '12px',
-      '--sp-field-gap': '4px',
-    },
-    normal: {
-      '--sp-main-pad': '24px',
-      '--sp-card-gap': '12px',
-      '--sp-sidebar-pad': '16px',
-      '--sp-topcat-pad': '10px 16px',
-      '--sp-card-pad': '14px 16px',
-      '--sp-card-gap-inner': '8px',
-      '--sp-panel-pad': '24px',
-      '--sp-panel-gap': '16px',
-      '--sp-field-gap': '5px',
-    },
-    comfortable: {
-      '--sp-main-pad': '32px',
-      '--sp-card-gap': '18px',
-      '--sp-sidebar-pad': '22px',
-      '--sp-topcat-pad': '16px 22px',
-      '--sp-card-pad': '20px 22px',
-      '--sp-card-gap-inner': '12px',
-      '--sp-panel-pad': '32px',
-      '--sp-panel-gap': '22px',
-      '--sp-field-gap': '8px',
-    },
-  };
 
   let editorLog: Log | null = null;
   let showEditor = false;
-  let showSettings = false;
   let editorProject: Project | null = null;
   let showProjectEditor = false;
   let editorLink: ProjectLink | null = null;
@@ -82,6 +46,12 @@
 
   onMount(async () => {
     await loadAll();
+    // Arriving from a template clone: focus the new project.
+    const focus = get(pendingProjectFocus);
+    if (focus != null) {
+      pendingProjectFocus.set(null);
+      focusOnProject(focus);
+    }
     cat1Label = $settings.category1_label;
     cat2Label = $settings.category2_label;
     cat3Label = $settings.category3_label;
@@ -102,8 +72,11 @@
   }
 
   $: isDark = $settings.dark_mode;
-  $: densityStyle = Object.entries(DENSITY_VARS[$settings.density] ?? DENSITY_VARS.normal)
-    .map(([k, v]) => `${k}:${v}`).join(';');
+  $: densityStyle = densityStyleFor($settings.density);
+
+  // Template projects live only on the Templates page — hide them (and their
+  // logs, via project visibility) from the whole homepage.
+  $: visProjects = $projects.filter(p => !p.is_template);
 
   $: logTypes = $picklists.filter(v => v.picklist_type === 'log_type');
   const byLabel = (a: {label: string}, b: {label: string}) => a.label.localeCompare(b.label);
@@ -129,21 +102,21 @@
 
   $: matchingLogs = $logs.filter(l =>
     (selLogType === null || l.type_id === selLogType) &&
-    logMatchesSlot(l, 1, selCat1, $projects) &&
-    logMatchesSlot(l, 2, selCat2, $projects) &&
-    logMatchesSlot(l, 3, selCat3, $projects) &&
-    logMatchesSlot(l, 4, selCat4, $projects)
+    logMatchesSlot(l, 1, selCat1, visProjects) &&
+    logMatchesSlot(l, 2, selCat2, visProjects) &&
+    logMatchesSlot(l, 3, selCat3, visProjects) &&
+    logMatchesSlot(l, 4, selCat4, visProjects)
   );
 
   // ── Project visibility ───────────────────────────────────────────────────
 
   $: ({ visible: visibleProjectIds, ancestorOnly: ancestorOnlyProjectIds } =
-    computeVisibility($projects, matchingLogs, selProject, showClosed, noLogFilter));
+    computeVisibility(visProjects, matchingLogs, selProject, showClosed, noLogFilter));
 
-  $: topLevelProjects = $projects.filter(p => p.parent_id == null);
+  $: topLevelProjects = visProjects.filter(p => p.parent_id == null);
   $: visibleTopLevelProjects = topLevelProjects.filter(p => visibleProjectIds.has(p.id));
 
-  $: projectOptions = sortedProjectOptions($projects);
+  $: projectOptions = sortedProjectOptions(visProjects);
 
   // ── Project lookup ────────────────────────────────────────────────────────
   let lookupSearch = '';
@@ -151,7 +124,7 @@
   let lookupInput: HTMLInputElement;
 
   $: selectedProjectLabel = selProject != null
-    ? ($projects.find(p => p.id === selProject)?.title ?? '')
+    ? (visProjects.find(p => p.id === selProject)?.title ?? '')
     : '';
 
   $: filteredProjectOptions = (() => {
@@ -176,7 +149,7 @@
 
   function openNew(typeId: number | null = null, projectId: number | null = null) {
     editorLog = (typeId !== null || projectId !== null)
-      ? ({ type_id: typeId ?? logTypes[0]?.id ?? 0, project_id: projectId ?? $projects[0]?.id ?? 0 } as any)
+      ? ({ type_id: typeId ?? logTypes[0]?.id ?? 0, project_id: projectId ?? visProjects[0]?.id ?? 0 } as any)
       : null;
     showEditor = true;
   }
@@ -206,7 +179,7 @@
 
   function openEditLink(e: CustomEvent<ProjectLink>) {
     editorLink = e.detail;
-    const proj = $projects.find(p => p.id === e.detail.project_id);
+    const proj = visProjects.find(p => p.id === e.detail.project_id);
     editorLinkProjectId = e.detail.project_id;
     editorLinkProjectTitle = proj?.title ?? '';
     showLinkEditor = true;
@@ -218,9 +191,21 @@
     openNew(e.detail.typeId, e.detail.project.id);
   }
 
+  // After creating a project or log, reveal it: clear category filters and
+  // focus the project filter on it, so it doesn't vanish behind active filters.
+  function focusOnProject(projectId: number) {
+    selCat1 = []; selCat2 = []; selCat3 = []; selCat4 = [];
+    selLogType = null;
+    selProject = projectId;
+  }
+
+  function onProjectCreated(e: CustomEvent<Project>) { focusOnProject(e.detail.id); }
+
+  function onLogCreated(e: CustomEvent<Log>) { focusOnProject(Number(e.detail.project_id)); }
+
   function openNewSubProject(e: CustomEvent<Project>) {
     const parent = e.detail;
-    editorProject = { id: 0, title: '', description: '', parent_id: parent.id, is_closed: false, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
+    editorProject = { id: 0, title: '', description: '', parent_id: parent.id, is_closed: false, is_template: false, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
     showProjectEditor = true;
   }
 </script>
@@ -229,29 +214,13 @@
 
   <header class="menu-bar">
     <div class="menu-left">
-      <svg width="36" height="40" viewBox="0 0 36 40" aria-label="Note Ledger">
-        <rect x="0" y="1" width="6" height="38" rx="1.5" fill="#4f46e5"/>
-        <rect x="6" y="1" width="27" height="38" rx="1.5" fill="#6366f1"/>
-        <rect x="32" y="3" width="4" height="34" rx="0.5" fill="#e0e7ff"/>
-        <line x1="32" y1="9"  x2="36" y2="9"  stroke="#a5b4fc" stroke-width="0.6"/>
-        <line x1="32" y1="15" x2="36" y2="15" stroke="#a5b4fc" stroke-width="0.6"/>
-        <line x1="32" y1="21" x2="36" y2="21" stroke="#a5b4fc" stroke-width="0.6"/>
-        <line x1="32" y1="27" x2="36" y2="27" stroke="#a5b4fc" stroke-width="0.6"/>
-        <line x1="32" y1="33" x2="36" y2="33" stroke="#a5b4fc" stroke-width="0.6"/>
-        <text
-          x="19" y="20"
-          text-anchor="middle" dominant-baseline="middle"
-          transform="rotate(-90, 19, 20)"
-          font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-          font-size="6.5" font-weight="800" fill="#fff" opacity="0.95" letter-spacing="0.3">NLedger</text>
-      </svg>
       <label class="toggle-wrap" title="Show closed projects">
         <span class="toggle-switch" class:on={showClosed} on:click={() => showClosed = !showClosed} role="switch" aria-checked={showClosed} tabindex="0" on:keydown={e => e.key === ' ' && (showClosed = !showClosed)}>
           <span class="toggle-thumb"></span>
         </span>
         <span class="toggle-label">Show closed</span>
       </label>
-      {#if $projects.length > 0}
+      {#if visProjects.length > 0}
         <div class="project-lookup" class:active={lookupOpen}>
           <input
             bind:this={lookupInput}
@@ -265,7 +234,7 @@
           {#if lookupOpen}
             <div class="lookup-dropdown">
               {#each filteredProjectOptions as opt}
-                {@const proj = $projects.find(p => p.id === opt.id)}
+                {@const proj = visProjects.find(p => p.id === opt.id)}
                 <button
                   class="lookup-option"
                   class:is-closed={proj?.is_closed}
@@ -296,9 +265,7 @@
     </div>
     <nav class="menu-nav">
       <button class="btn-secondary-sm" on:click={toggleFoldAll}>{allCollapsed ? '▸ Unfold all' : '▾ Fold all'}</button>
-      <a href="/deadlines" class="btn-secondary-sm">Deadlines</a>
       <button class="btn-secondary-sm" on:click={openNewProject}>+ New Project</button>
-      <button class="theme-toggle" on:click={() => showSettings = true} title="Settings">⚙️</button>
     </nav>
   </header>
 
@@ -326,10 +293,10 @@
         {#each visibleTopLevelProjects as project (project.id)}
           <ProjectCard
             {project}
-            subProjects={$projects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(project.id))}
+            subProjects={visProjects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(project.id))}
             allLogs={matchingLogs}
             allLogsTotal={$logs}
-            allProjects={$projects}
+            allProjects={visProjects}
             allLinks={$projectLinks}
             {visibleProjectIds}
             {ancestorOnlyProjectIds}
@@ -362,18 +329,20 @@
       log={editorLog}
       {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
       cat1Label={cat1Label} cat2Label={cat2Label} cat3Label={cat3Label} cat4Label={cat4Label}
-      allProjects={$projects}
+      allProjects={visProjects}
       on:close={closeEditor}
+      on:created={onLogCreated}
     />
   {/if}
 
   {#if showProjectEditor}
     <ProjectEditor
       project={editorProject}
-      allProjects={$projects}
+      allProjects={visProjects}
       {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
       {cat1Label} {cat2Label} {cat3Label} {cat4Label}
       on:close={closeProjectEditor}
+      on:created={onProjectCreated}
     />
   {/if}
 
@@ -386,9 +355,6 @@
     />
   {/if}
 
-  {#if showSettings}
-    <SettingsPanel on:close={() => showSettings = false} />
-  {/if}
 </div>
 
 <style>
@@ -406,7 +372,7 @@
     background: var(--surface-2);
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    height: 100vh;
+    height: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -422,13 +388,6 @@
   .menu-left { display: flex; align-items: center; gap: 16px; }
 
   .menu-nav { display: flex; align-items: center; gap: 10px; }
-
-  .theme-toggle {
-    background: none; border: 1px solid var(--border); border-radius: 8px;
-    width: 34px; height: 34px; cursor: pointer; font-size: 16px;
-    display: flex; align-items: center; justify-content: center; transition: background 0.15s;
-  }
-  .theme-toggle:hover { background: var(--surface-2); }
 
   .app.dark {
     --text:         #f3f4f6;

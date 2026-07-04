@@ -1,11 +1,7 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
-  import { get } from 'svelte/store';
-  import { settings, picklists, projects, saveSettings, createPicklistValue, updatePicklistValue, deletePicklistValue, createProject, updateProject, deleteProject } from '../store';
-  import { CAT_COLORS } from '../types';
-  import type { PicklistValue, Project, Density } from '../types';
-
-  const dispatch = createEventDispatcher();
+  import { settings, picklists, projects, saveSettings, createPicklistValue, updatePicklistValue, deletePicklistValue, createProject, updateProject, deleteProject } from '$lib/store';
+  import { CAT_COLORS } from '$lib/types';
+  import type { PicklistValue, Project, Density } from '$lib/types';
 
   // Local copies for editing
   let cat1Label = $settings.category1_label;
@@ -96,7 +92,7 @@
     try {
       await createProject({
         title: trimmed, description: '', parent_id: null,
-        is_closed: false, start_date: null, end_date: null,
+        is_closed: false, is_template: false, start_date: null, end_date: null,
         category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [],
       });
       projectError = '';
@@ -136,18 +132,14 @@
     return parent ? `${parent.title} › ${p.title}` : p.title;
   }
 
-  function close() { dispatch('close'); }
 </script>
 
-<div class="backdrop" on:click={close} on:keydown={e => e.key === 'Escape' && close()} role="presentation"></div>
+<div class="page">
+  <header class="page-header">
+    <h1>Settings</h1>
+  </header>
 
-<div class="modal" role="dialog" aria-modal="true">
-  <div class="modal-header">
-    <h2>Settings</h2>
-    <button class="icon-btn" on:click={close} aria-label="Close">✕</button>
-  </div>
-
-  <div class="modal-body">
+  <div class="page-body">
     <nav class="settings-nav">
       {#each SECTIONS as s}
         <button
@@ -315,56 +307,28 @@
 </div>
 
 <style>
-  .backdrop {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.5);
-    backdrop-filter: blur(2px);
-    z-index: 100;
+  .page {
+    display: flex; flex-direction: column;
+    height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   }
 
-  .modal {
-    position: fixed;
-    top: 10vh; left: 10vw;
-    width: 80vw; height: 80vh;
+  .page-header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 20px;
     background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    z-index: 101;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
-    animation: popIn 0.18s ease;
-  }
-
-  @keyframes popIn {
-    from { opacity: 0; transform: scale(0.97) translateY(8px); }
-    to   { opacity: 1; transform: scale(1) translateY(0); }
-  }
-
-  .modal-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: var(--sp-panel-gap, 20px) var(--sp-panel-pad, 24px);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
-  h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
+  h1 { margin: 0; font-size: 18px; font-weight: 700; }
 
-  .icon-btn {
-    width: 30px; height: 30px;
-    border: none; background: none;
-    color: var(--text-muted); cursor: pointer;
-    border-radius: 6px; font-size: 16px;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.15s;
-  }
-  .icon-btn:hover { background: var(--surface-2); color: var(--text); }
-
-  .modal-body {
+  .page-body {
     flex: 1;
     display: flex;
     overflow: hidden;
     min-height: 0;
+    background: var(--surface);
   }
 
   .settings-nav {

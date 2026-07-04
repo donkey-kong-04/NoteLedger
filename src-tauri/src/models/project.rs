@@ -7,6 +7,8 @@ pub struct Project {
     pub description: String,
     pub parent_id: Option<i64>,
     pub is_closed: bool,
+    #[serde(default)]
+    pub is_template: bool,
     pub start_date: Option<String>,
     pub end_date: Option<String>,
     pub category1_ids: Vec<i64>,

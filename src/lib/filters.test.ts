@@ -15,6 +15,7 @@ function project(id: number, parent_id: number | null, extra: Partial<Project> =
     description: '',
     parent_id,
     is_closed: false,
+    is_template: false,
     start_date: null,
     end_date: null,
     category1_ids: [],
