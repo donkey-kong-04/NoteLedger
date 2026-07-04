@@ -1,66 +1,19 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { get } from 'svelte/store';
-  import { logs, projects, picklists, settings, loadAll, saveSettings, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
-  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, sortedProjectOptions } from '$lib/types';
+  import { logs, projects, picklists, settings, loadAll, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
+  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel } from '$lib/types';
   import type { Log, Project, PicklistValue } from '$lib/types';
   import Badge from '$lib/components/Badge.svelte';
-  import CategoryFilter from '$lib/components/CategoryFilter.svelte';
+  import FilterPanel from '$lib/components/FilterPanel.svelte';
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
   import { logMatchesSlot, getDescendantIds } from '$lib/filters';
   import { densityStyle } from '$lib/density';
+  import { sanitizeHtml } from '$lib/sanitize';
 
   onMount(() => loadAll());
 
-
-  function clearAllFilters() {
-    $selCat1 = []; $selCat2 = []; $selCat3 = []; $selCat4 = [];
-    $selProject = null;
-    $selLogType = null;
-    $showClosed = false;
-  }
-
-  let cat1Label = '';
-  let cat2Label = '';
-  let cat3Label = '';
-  let cat4Label = '';
-  $: { cat1Label = $settings.category1_label; cat2Label = $settings.category2_label; cat3Label = $settings.category3_label; cat4Label = $settings.category4_label; }
-
-  async function persistLabelChange() {
-    const s = get(settings);
-    await saveSettings({ ...s, category1_label: cat1Label, category2_label: cat2Label, category3_label: cat3Label, category4_label: cat4Label });
-  }
-
   $: pageDensityStyle = densityStyle($settings.density);
-
-  // ── Project lookup (same behavior as the homepage) ────────────────────────
-  let lookupSearch = '';
-  let lookupOpen = false;
-  let lookupInput: HTMLInputElement;
-
-  $: projectOptions = sortedProjectOptions(nonTemplateProjects);
-  $: selectedProjectLabel = $selProject != null
-    ? (nonTemplateProjects.find(p => p.id === $selProject)?.title ?? '')
-    : '';
-  $: filteredProjectOptions = (() => {
-    const tokens = lookupSearch.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    return projectOptions.filter(opt => {
-      const title = opt.label.trim().toLowerCase();
-      return tokens.length === 0 || tokens.every(t => title.includes(t));
-    });
-  })();
-
-  function selectProject(id: number | null) {
-    $selProject = id;
-    lookupSearch = '';
-    lookupOpen = false;
-    lookupInput?.blur();
-  }
-
-  function onLookupBlur() {
-    setTimeout(() => { lookupOpen = false; lookupSearch = ''; }, 150);
-  }
 
   let editorLog: Log | null = null;
   let showLogEditor = false;
@@ -182,75 +135,8 @@
   <header class="page-header">
     <h1>Table view</h1>
     <span class="count">{sortedLogs.length} log{sortedLogs.length !== 1 ? 's' : ''}</span>
-    <label class="toggle-wrap" title="Show closed logs">
-      <span class="toggle-switch" class:on={$showClosed} on:click={() => $showClosed = !$showClosed} role="switch" aria-checked={$showClosed} tabindex="0" on:keydown={e => e.key === ' ' && ($showClosed = !$showClosed)}>
-        <span class="toggle-thumb"></span>
-      </span>
-      <span class="toggle-label">Show closed</span>
-    </label>
-    {#if nonTemplateProjects.length > 0}
-      <div class="project-lookup" class:active={lookupOpen}>
-        <input
-          bind:this={lookupInput}
-          class="project-lookup-input"
-          type="text"
-          placeholder={$selProject != null ? selectedProjectLabel : 'Filter project…'}
-          bind:value={lookupSearch}
-          on:focus={() => { lookupOpen = true; lookupSearch = ''; $selProject = null; }}
-          on:blur={onLookupBlur}
-          on:keydown={e => { if (e.key === 'Enter' && filteredProjectOptions.length > 0) selectProject(filteredProjectOptions[0].id); if (e.key === 'Escape') { lookupOpen = false; lookupSearch = ''; lookupInput?.blur(); } }}
-        />
-        {#if lookupOpen}
-          <div class="lookup-dropdown">
-            {#each filteredProjectOptions as opt}
-              {@const proj = nonTemplateProjects.find(p => p.id === opt.id)}
-              <button
-                class="lookup-option"
-                class:is-closed={proj?.is_closed}
-                on:mousedown|preventDefault={() => selectProject(opt.id)}
-              >
-                <span class="lookup-label">{opt.label}</span>
-                {#if proj?.is_closed}
-                  <span class="lookup-closed-pill">Closed</span>
-                {/if}
-              </button>
-            {/each}
-            {#if filteredProjectOptions.length === 0}
-              <div class="lookup-empty">No match</div>
-            {/if}
-          </div>
-        {/if}
-      </div>
-    {/if}
-    {#if logTypes.length > 0}
-      <select class="logtype-filter" class:active={$selLogType !== null} bind:value={$selLogType} title="Filter by log type">
-        <option value={null}>All types</option>
-        {#each logTypes as t (t.id)}
-          <option value={t.id}>{t.label}</option>
-        {/each}
-      </select>
-    {/if}
-    <button class="btn-clear-filters" on:click={clearAllFilters}>✕ Clear filters</button>
+    <FilterPanel />
   </header>
-
-  <div class="layout">
-    <aside class="sidebar">
-      <div class="sidebar-cat">
-        <CategoryFilter catType="category_1" bind:label={cat1Label} values={cat1Vals} bind:selected={$selCat1} layout="vertical" on:labelChange={persistLabelChange} />
-      </div>
-      <div class="sidebar-separator"></div>
-      <div class="sidebar-cat">
-        <CategoryFilter catType="category_2" bind:label={cat2Label} values={cat2Vals} bind:selected={$selCat2} layout="vertical" on:labelChange={persistLabelChange} />
-      </div>
-      <div class="sidebar-separator"></div>
-      <div class="sidebar-cat">
-        <CategoryFilter catType="category_3" bind:label={cat3Label} values={cat3Vals} bind:selected={$selCat3} layout="vertical" on:labelChange={persistLabelChange} />
-      </div>
-      <div class="sidebar-separator"></div>
-      <div class="sidebar-cat">
-        <CategoryFilter catType="category_4" bind:label={cat4Label} values={cat4Vals} bind:selected={$selCat4} layout="vertical" on:labelChange={persistLabelChange} />
-      </div>
-    </aside>
 
   <div class="table-wrap">
     {#if sortedLogs.length === 0}
@@ -311,7 +197,7 @@
               </td>
               <td class="col-desc">
                 {#if log.description}
-                  <div class="log-desc" on:click={handleLinkClick}>{@html log.description}</div>
+                  <div class="log-desc" on:click={handleLinkClick}>{@html sanitizeHtml(log.description)}</div>
                 {/if}
               </td>
             </tr>
@@ -319,7 +205,6 @@
         </tbody>
       </table></div>
     {/if}
-  </div>
   </div>
 
   {#if showLogEditor}
@@ -354,7 +239,7 @@
   }
 
   .page-header {
-    display: flex; align-items: center; gap: 16px;
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
     padding: 12px 20px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
@@ -365,98 +250,8 @@
 
   .count { font-size: 12px; color: var(--text-muted); }
 
-  .layout {
-    display: grid;
-    grid-template-columns: 230px 1fr;
-    grid-template-rows: 1fr;
-    flex: 1; overflow: hidden; min-height: 0;
-  }
-
-  .sidebar {
-    grid-column: 1; grid-row: 1;
-    background: var(--surface); border-right: 1px solid var(--border);
-    display: flex; flex-direction: column; overflow: hidden; min-height: 0;
-  }
-  .sidebar-cat { flex: 1; overflow-y: auto; padding: var(--sp-sidebar-pad, 16px); min-height: 0; }
-  .sidebar-separator { height: 1px; background: var(--border); flex-shrink: 0; margin: 0 12px; }
-
-  /* Filter controls — same look as the homepage menu bar */
-  .toggle-wrap {
-    display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
-  }
-  .toggle-label { font-size: 13px; font-weight: 600; color: var(--text-muted); }
-  .toggle-switch {
-    width: 36px; height: 20px; border-radius: 10px;
-    background: var(--surface-3); border: 1px solid var(--border);
-    position: relative; cursor: pointer;
-    transition: background 0.2s, border-color 0.2s;
-    display: flex; align-items: center;
-  }
-  .toggle-switch.on { background: var(--accent); border-color: var(--accent); }
-  .toggle-thumb {
-    width: 14px; height: 14px; border-radius: 50%;
-    background: #fff; position: absolute; left: 2px;
-    transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  }
-  .toggle-switch.on .toggle-thumb { left: 18px; }
-
-  .project-lookup { position: relative; display: flex; align-items: center; }
-  .project-lookup-input {
-    background: var(--surface-2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 8px;
-    padding: 6px 28px 6px 10px; font-size: 13px; font-family: inherit;
-    outline: none; width: 180px;
-    transition: border-color 0.15s;
-  }
-  .project-lookup.active .project-lookup-input,
-  .project-lookup-input:focus { border-color: var(--accent); }
-  .lookup-dropdown {
-    position: absolute; top: calc(100% + 4px); left: 0;
-    min-width: 220px; max-height: 280px; overflow-y: auto;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-    z-index: 300;
-    display: flex; flex-direction: column;
-  }
-  .lookup-option {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    width: 100%; text-align: left;
-    background: none; border: none; cursor: pointer;
-    padding: 7px 12px; font-size: 13px; font-family: inherit;
-    color: var(--text); white-space: pre;
-    transition: background 0.1s;
-  }
-  .lookup-option:hover { background: var(--surface-2); }
-  .lookup-option.is-closed { opacity: 0.6; }
-  .lookup-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .lookup-closed-pill {
-    font-size: 10px; font-weight: 600; text-transform: uppercase;
-    background: var(--border); color: var(--text-muted);
-    border-radius: 999px; padding: 1px 6px; flex-shrink: 0;
-    white-space: normal;
-  }
-  .lookup-empty { padding: 8px 12px; font-size: 12px; color: var(--text-muted); }
-
-  .logtype-filter {
-    background: var(--surface-2); color: var(--text);
-    border: 1px solid var(--border); border-radius: 8px;
-    padding: 6px 10px; font-size: 13px; font-family: inherit;
-    outline: none; cursor: pointer;
-    transition: border-color 0.15s;
-  }
-  .logtype-filter:focus { border-color: var(--accent); }
-  .logtype-filter.active { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-
-  .btn-clear-filters {
-    background: none; color: #ef4444;
-    border: 1px solid #ef4444; border-radius: 8px;
-    padding: 6px 12px; font-size: 13px; font-weight: 600;
-    cursor: pointer; font-family: inherit; transition: background 0.15s;
-  }
-  .btn-clear-filters:hover { background: rgba(239,68,68,0.1); }
-
   .table-wrap {
-    grid-column: 2; grid-row: 1;
+    flex: 1;
     overflow-y: auto;
     padding: 16px 20px;
     min-height: 0;

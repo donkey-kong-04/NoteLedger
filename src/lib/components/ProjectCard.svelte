@@ -4,6 +4,7 @@
   import { deadlineColor, contrastText, handleLinkClick, openSinceLabel } from '../types';
   import type { Log, Project, PicklistValue, ProjectLink } from '../types';
   import { openLink } from '../types';
+  import { sanitizeHtml } from '../sanitize';
 
   export let project: Project;
   export let subProjects: Project[];
@@ -190,7 +191,7 @@
                     </td>
                     <td class="col-desc">
                       {#if log.description}
-                        <div class="log-desc" on:click={handleLinkClick}>{@html log.description}</div>
+                        <div class="log-desc" on:click={handleLinkClick}>{@html sanitizeHtml(log.description)}</div>
                       {/if}
                     </td>
                   </tr>
@@ -470,8 +471,8 @@
     display: flex;
     background: var(--surface-3);
     border-bottom: 1px solid var(--border);
-    padding: 3px;
-    gap: 3px;
+    padding: 0;
+    gap: 0;
   }
   .body-tab {
     flex: 1;
@@ -479,10 +480,12 @@
     background: none; border: none; cursor: pointer; font-family: inherit;
     font-size: 12px; font-weight: 600;
     color: var(--text-muted);
-    padding: 5px 0;
-    border-radius: 7px;
+    padding: 7px 0;
+    border-radius: 0;
     transition: background 0.15s, color 0.15s;
   }
+  .body-tab:first-child { border-top-left-radius: 7px; }
+  .body-tab:last-child { border-top-right-radius: 7px; }
   .body-tab:hover { color: var(--text); background: var(--surface-hover); }
   .body-tab.active {
     background: var(--accent);
