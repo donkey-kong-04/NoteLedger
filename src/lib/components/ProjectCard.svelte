@@ -466,39 +466,44 @@
   }
   .card-body .log-table-wrap { min-width: 0; }
 
-  /* Logs / Links tabs — same segmented design as the page nav, stretched full width */
+  /* Logs / Links tabs — folder-tab style: the active tab shares the card
+     body's background and merges with the panel below (its bottom border goes
+     transparent), like a physical folder tab; inactive tabs stay recessed. */
   .body-tabs {
     display: flex;
     background: var(--surface-3);
-    border-bottom: 1px solid var(--border);
     padding: 0;
     gap: 0;
   }
   .body-tab {
     flex: 1;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    background: none; border: none; cursor: pointer; font-family: inherit;
+    background: none; cursor: pointer; font-family: inherit;
     font-size: 12px; font-weight: 600;
     color: var(--text-muted);
     padding: 7px 0;
+    border: none;
+    border-bottom: 1px solid var(--border);
     border-radius: 0;
     transition: background 0.15s, color 0.15s;
   }
+  .body-tab + .body-tab { border-left: 1px solid var(--border); }
   .body-tab:first-child { border-top-left-radius: 7px; }
   .body-tab:last-child { border-top-right-radius: 7px; }
   .body-tab:hover { color: var(--text); background: var(--surface-hover); }
   .body-tab.active {
-    background: var(--accent);
-    color: #fff;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    background: var(--surface);
+    color: var(--text);
+    border-bottom-color: transparent;
+    box-shadow: inset 0 2px 0 var(--accent);
   }
-  .body-tab.active:hover { color: #fff; background: var(--accent); }
+  .body-tab.active:hover { color: var(--text); background: var(--surface); }
   .tab-count {
     font-size: 10px; font-weight: 700;
     background: var(--surface); color: var(--text-muted);
     border-radius: 999px; padding: 0 6px; line-height: 14px;
   }
-  .body-tab.active .tab-count { background: rgba(255,255,255,0.25); color: #fff; }
+  .body-tab.active .tab-count { background: var(--surface-3); color: var(--text); }
 
   .tab-empty {
     margin: 0; padding: 10px 14px;

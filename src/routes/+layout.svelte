@@ -2,6 +2,9 @@
   import { settings, loadAll, filterDrawerOpen } from '$lib/store';
   import { onMount } from 'svelte';
   import NavTabs from '$lib/components/NavTabs.svelte';
+  // Baked in at build time by Vite; package.json is the version source of
+  // truth, kept in sync with tauri.conf.json/Cargo.toml by the release bump.
+  import { version } from '../../package.json';
 
   onMount(() => loadAll());
 
@@ -10,7 +13,7 @@
 
 <div class="app-shell" class:dark={isDark} class:drawer-open={$filterDrawerOpen}>
   <div class="nav-bar">
-    <span class="app-logo">Note Ledger</span>
+    <span class="app-logo">Note Ledger <span class="app-version">{version}</span></span>
     <NavTabs />
   </div>
   <div class="page-slot">
@@ -61,6 +64,10 @@
     font-size: 16px; font-weight: 700; color: var(--text);
     letter-spacing: -0.01em; user-select: none;
     white-space: nowrap;
+  }
+  .app-version {
+    font-size: 11px; font-weight: 500; color: var(--text-muted);
+    letter-spacing: 0;
   }
 
   .page-slot {
