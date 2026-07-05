@@ -471,30 +471,29 @@
      transparent), like a physical folder tab; inactive tabs stay recessed. */
   .body-tabs {
     display: flex;
-    background: var(--surface-3);
+    /* Same color as the project header bar so the card top reads as one piece
+       (in dark mode --project-header and --surface-3 are already identical). */
+    background: var(--project-header, var(--surface-3));
     padding: 0;
     gap: 0;
   }
+  /* No separator borders: tabs are distinguished by background alone (active
+     = card surface, inactive = header-colored strip), same as dark mode where
+     the old borders were invisible anyway (--border == --project-header). */
   .body-tab {
-    flex: 1;
     display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     background: none; cursor: pointer; font-family: inherit;
     font-size: 12px; font-weight: 600;
     color: var(--text-muted);
-    padding: 7px 0;
+    padding: 7px 16px;
     border: none;
-    border-bottom: 1px solid var(--border);
-    border-radius: 0;
+    border-radius: 7px 7px 0 0;
     transition: background 0.15s, color 0.15s;
   }
-  .body-tab + .body-tab { border-left: 1px solid var(--border); }
-  .body-tab:first-child { border-top-left-radius: 7px; }
-  .body-tab:last-child { border-top-right-radius: 7px; }
   .body-tab:hover { color: var(--text); background: var(--surface-hover); }
   .body-tab.active {
     background: var(--surface);
     color: var(--text);
-    border-bottom-color: transparent;
     box-shadow: inset 0 2px 0 var(--accent);
   }
   .body-tab.active:hover { color: var(--text); background: var(--surface); }
