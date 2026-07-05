@@ -30,6 +30,10 @@ export const selCat4 = writable<number[]>([]);
 export const selProject = writable<number | null>(null);
 export const selLogType = writable<number | null>(null);
 
+// Whether the filter drawer is open; lives here so the app shell in
+// +layout.svelte can shift the page content aside instead of being overlaid.
+export const filterDrawerOpen = writable(false);
+
 export async function loadAll() {
   const [s, p, pr, l, pl] = await Promise.all([
     invoke<UserSettings>('get_settings'),

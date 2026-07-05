@@ -133,8 +133,6 @@
 
 <div class="page" style={pageDensityStyle}>
   <header class="page-header">
-    <h1>Table view</h1>
-    <span class="count">{sortedLogs.length} log{sortedLogs.length !== 1 ? 's' : ''}</span>
     <FilterPanel />
   </header>
 
@@ -245,10 +243,6 @@
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
-
-  h1 { margin: 0; font-size: 18px; font-weight: 700; }
-
-  .count { font-size: 12px; color: var(--text-muted); }
 
   .table-wrap {
     flex: 1;

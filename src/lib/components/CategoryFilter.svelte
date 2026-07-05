@@ -223,6 +223,14 @@
     align-items: center;
   }
 
+  /* In the drawer, long value lists scroll instead of growing the panel */
+  .cat-filter.vertical .badges {
+    max-height: 180px;
+    overflow-y: auto;
+    align-content: flex-start;
+    padding-right: 4px;
+  }
+
   .badge-row {
     display: flex; align-items: center; gap: 3px;
   }

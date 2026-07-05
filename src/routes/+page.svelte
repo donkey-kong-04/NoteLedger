@@ -199,7 +199,7 @@
         {#if topLevelProjects.length === 0}
           <div class="empty">
             <span class="empty-icon">📋</span>
-            <p>No logs yet. Click <strong>+ New Log</strong> to get started.</p>
+            <p>No projects yet. Click <strong>+ New Project</strong> to get started.</p>
           </div>
         {/if}
       </div>

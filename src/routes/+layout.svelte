@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { settings, loadAll } from '$lib/store';
+  import { settings, loadAll, filterDrawerOpen } from '$lib/store';
   import { onMount } from 'svelte';
   import NavTabs from '$lib/components/NavTabs.svelte';
 
@@ -8,7 +8,7 @@
   $: isDark = $settings.dark_mode;
 </script>
 
-<div class="app-shell" class:dark={isDark}>
+<div class="app-shell" class:dark={isDark} class:drawer-open={$filterDrawerOpen}>
   <div class="nav-bar">
     <span class="app-logo">Note Ledger</span>
     <NavTabs />
@@ -36,20 +36,31 @@
     display: flex;
     flex-direction: column;
     background: var(--surface-2);
+    transition: padding-left 0.2s ease;
   }
 
+  /* The filter drawer (fixed, left) pushes the content aside instead of
+     covering it; width must match .drawer in FilterPanel.svelte. */
+  .app-shell.drawer-open {
+    padding-left: min(440px, 92vw);
+  }
+
+  /* Logo left, tabs centered — as grid tracks (not absolute positioning) so
+     they can't overlap when the open filter drawer narrows the shell. */
   .nav-bar {
-    position: relative;
-    display: flex; justify-content: center; align-items: center;
-    padding: 6px 0;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 6px 20px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
   .app-logo {
-    position: absolute; left: 20px;
+    justify-self: start;
     font-size: 16px; font-weight: 700; color: var(--text);
     letter-spacing: -0.01em; user-select: none;
+    white-space: nowrap;
   }
 
   .page-slot {

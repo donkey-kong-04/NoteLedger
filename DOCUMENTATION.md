@@ -167,7 +167,7 @@ Below the navigation bar, the main screen (**Project view**, the `/` route — h
   - **Left group**: the **filter funnel icon** and the active-filter **chips** (see Filter Drawer below).
   - **Right group** (`nav`): **"Fold all / Unfold all"** toggle button, "+ New Project" button. No dark mode toggle here — it lives only in Settings.
 - **Main area**: Project cards in a vertical tree list (full width — there is no permanent sidebar anymore).
-- **Filter drawer**: slides in from the left when the funnel icon is clicked.
+- **Filter drawer**: slides in from the left when the funnel icon is clicked, **pushing the page content to the right** (the whole app shell, navigation bar included, shifts by the drawer width) rather than covering it.
 
 All spacing in the menu bar, main grid, log/project cards, settings page, and log/project editors is controlled by the **Layout density** setting (see Settings Page).
 
@@ -177,10 +177,10 @@ All filters live in a single component, `FilterPanel.svelte`, used by both the P
 
 1. **Funnel icon button** (left side of the page header). Clicking toggles the drawer. When any filter is active, the icon is accent-colored and carries a **count badge** with the number of active filters.
 2. **Active-filter chips**, shown next to the icon at all times (even with the drawer closed) so active filters are never hidden state. One chip per active filter — selected project, log type, each selected category value (tinted with its category color), and "Closed shown". Each chip has an **×** that clears just that filter.
-3. **The drawer** itself: a non-modal panel (440px) that slides in from the left edge — **no backdrop**, so the main view stays visible and updates live as filters are toggled. Closed via the funnel icon, the ✕ button, or **Escape**. Header row: "Filters" title, a red **✕ Clear all** button (visible only while filters are active), and the close button. Body sections:
+3. **The drawer** itself: a non-modal panel (440px) that slides in from the left edge and **pushes the page content to the right** instead of overlaying it (the app shell gets matching left padding, animated in sync), so the main view stays fully visible and updates live as filters are toggled. Closed via the funnel icon, the ✕ button, **Escape**, or clicking anywhere outside the drawer. Open state lives in the `filterDrawerOpen` store so the layout can react; it resets when navigating to a page without filters. Header row: "Filters" title, a red **✕ Clear all** button (visible only while filters are active), and the close button. Body sections:
    - **Project filters** — project lookup (search input) and the "Show closed" toggle, side by side.
    - **Log filters** — the log type single-select.
-   - **Category filters** — the four category filter groups in a **2×2 grid** (1/2 on the first row, 3/4 on the second). Category labels remain editable in place here, and the "Add or search" badge management works exactly as before.
+   - **Category filters** — the four category filter groups in a **2×2 grid** (1/2 on the first row, 3/4 on the second). Each group's value list is capped at a **fixed height (180px, ~6 badge rows) and scrolls internally**, so long lists never stretch the drawer. Category labels remain editable in place here, and the "Add or search" badge management works exactly as before.
 
 The filter *behaviors* below are unchanged from the previous top-bar/sidebar design — only their location moved into the drawer.
 
@@ -230,7 +230,7 @@ Each section has a title and a short description above its controls. Settings ro
 All four categories sit in the drawer's **Category filters** section (2×2 grid), acting as quick filters.
 
 - **Label**: editable in place — clicking allows the user to rename the category.
-- **Values**: shown as clickable badges arranged **horizontally with wrapping**; clicking filters the main view. Values are sorted alphabetically.
+- **Values**: shown as clickable badges arranged **horizontally with wrapping**; clicking filters the main view. Values are sorted alphabetically. The list is capped at **180px high and scrolls internally** when a category has more values than fit.
 - **Edit/Delete buttons**: visible only when a badge is **selected** (not on hover) — ✎ edit (inline rename) and × delete (blocked if any log or project uses the value).
 - **Add or search**: an **"Add or search"** button appears **before** the badges. Clicking it opens an inline search input (border color matches the category color) that simultaneously filters visible badges (case-insensitive substring match as you type) and allows creating new values. Pressing Enter with an exact match toggles that value; with no match, creates a new value and auto-selects it. Clicking a badge while the search is open selects/deselects it and clears the search text. Escape or clicking away closes the input. The same control appears in the Log Editor and Project Editor category sections.
 
@@ -282,6 +282,8 @@ When a project has no logs to display:
 - **No filters active**: shows *"No logs yet — click + to add one."*
 - **Filters active and the project has logs but none match**: shows *"No logs matching the filters."*
 
+When there are **no projects at all**, the page shows a page-level empty state: *"No projects yet. Click + New Project to get started."* (a project must exist before any log can be created).
+
 ### Link Editor (slide-in panel, 400px wide)
 
 Fields:
@@ -303,7 +305,7 @@ A flat table display of logs across all projects (formerly called "Deadlines" �
 
 Sorted by due date ASC (no due date → end of list); closed logs sort after open ones and render greyed out with no deadline color. Descriptions are always fully expanded — no hover needed.
 
-**Filters**: the Table view embeds the same `FilterPanel` component as the Project view — funnel icon + chips in the page header, and the same filter drawer — with identical matching semantics (AND logic, categories inherited from ancestor projects, project filter covering the selected subtree). One log-centric adaptation: here "Show closed" reveals closed **logs** (hidden by default). **Filter state is shared** between the Project view and the Table view via Svelte stores in `store.ts` (`showClosed`, `selCat1–4`, `selProject`, `selLogType`) — switching pages keeps the same filters applied. Filters reset on app restart (in-memory only).
+**Filters**: the Table view embeds the same `FilterPanel` component as the Project view — funnel icon + chips in the page header (which contains **only** these filter controls — no page title or log count), and the same filter drawer — with identical matching semantics (AND logic, categories inherited from ancestor projects, project filter covering the selected subtree). One log-centric adaptation: here "Show closed" reveals closed **logs** (hidden by default). **Filter state is shared** between the Project view and the Table view via Svelte stores in `store.ts` (`showClosed`, `selCat1–4`, `selProject`, `selLogType`) — switching pages keeps the same filters applied. Filters reset on app restart (in-memory only).
 
 **Row click behavior** (same Log/Project editors as the main view, rendered on the page):
 - Clicking the **Project** column opens the **Project Editor** for the log's project.

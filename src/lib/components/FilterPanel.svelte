@@ -1,11 +1,15 @@
 <script lang="ts">
   import { get } from 'svelte/store';
+  import { onDestroy } from 'svelte';
   import CategoryFilter from './CategoryFilter.svelte';
-  import { picklists, projects, settings, saveSettings, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '../store';
+  import { picklists, projects, settings, saveSettings, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen } from '../store';
   import { sortedProjectOptions, CAT_COLORS } from '../types';
   import type { PicklistValue } from '../types';
 
-  let open = false;
+  // Open state is shared via the store so +layout.svelte can shift the page
+  // content aside. Reset on destroy so navigating to a page without a
+  // FilterPanel doesn't leave the content shifted next to nothing.
+  onDestroy(() => filterDrawerOpen.set(false));
 
   // Category labels are editable from the drawer (click a section label);
   // persisted to settings like the old sidebar did.
@@ -101,11 +105,11 @@
   $: activeCount = chips.length;
 
   function onWindowKeydown(e: KeyboardEvent) {
-    if (e.key !== 'Escape' || !open) return;
+    if (e.key !== 'Escape' || !$filterDrawerOpen) return;
     const t = e.target as HTMLElement | null;
     // Inputs handle Escape themselves (lookup, badge search/edit).
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-    open = false;
+    $filterDrawerOpen = false;
   }
 
   let drawerEl: HTMLElement;
@@ -116,10 +120,10 @@
   // from the DOM (chip ×, lookup options), which would make a click-time
   // contains() check fail and close the drawer on an inside interaction.
   function onWindowMousedown(e: MouseEvent) {
-    if (!open) return;
+    if (!$filterDrawerOpen) return;
     const t = e.target as Node;
     if (drawerEl?.contains(t) || controlsEl?.contains(t)) return;
-    open = false;
+    $filterDrawerOpen = false;
   }
 </script>
 
@@ -127,9 +131,9 @@
 
 <div class="filter-controls" bind:this={controlsEl}>
   <button
-    class="funnel-btn" class:engaged={activeCount > 0 || open}
-    on:click={() => open = !open}
-    title="Filters" aria-label="Filters" aria-expanded={open}
+    class="funnel-btn" class:engaged={activeCount > 0 || $filterDrawerOpen}
+    on:click={() => $filterDrawerOpen = !$filterDrawerOpen}
+    title="Filters" aria-label="Filters" aria-expanded={$filterDrawerOpen}
   >
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
       <path d="M1.5 2.5h13l-5 6v4.5l-3 1.5V8.5l-5-6z"/>
@@ -147,7 +151,7 @@
   {/each}
 </div>
 
-{#if open}
+{#if $filterDrawerOpen}
   <aside class="drawer" aria-label="Filters" bind:this={drawerEl}>
     <div class="drawer-header">
       <h2>Filters</h2>
@@ -155,7 +159,7 @@
         {#if activeCount > 0}
           <button class="btn-clear" on:click={clearAll}>✕ Clear all</button>
         {/if}
-        <button class="icon-btn" on:click={() => open = false} aria-label="Close">✕</button>
+        <button class="icon-btn" on:click={() => $filterDrawerOpen = false} aria-label="Close">✕</button>
       </div>
     </div>
 
@@ -281,12 +285,13 @@
   }
   .chip-x:hover { opacity: 1; }
 
+  /* Fixed to the viewport's left edge; the app shell in +layout.svelte adds
+     matching padding-left while open, so content sits beside, not under. */
   .drawer {
     position: fixed; top: 0; left: 0; bottom: 0;
     width: 440px; max-width: 92vw;
     background: var(--surface);
     border-right: 1px solid var(--border);
-    box-shadow: 8px 0 40px rgba(0,0,0,0.15);
     z-index: 90;
     display: flex; flex-direction: column;
     animation: slideInLeft 0.2s ease;
