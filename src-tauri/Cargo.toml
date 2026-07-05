@@ -1,6 +1,6 @@
 [package]
 name = "note-ledger-tauri"
-version = "0.4.5"
+version = "0.4.6"
 description = "Note Ledger — personal log and activity tracker"
 authors = ["Martin Chalot"]
 edition = "2021"
