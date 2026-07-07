@@ -1,6 +1,6 @@
 <script lang="ts">
   import { get } from 'svelte/store';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import CategoryFilter from './CategoryFilter.svelte';
   import { picklists, projects, settings, saveSettings, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen } from '../store';
   import { sortedProjectOptions, CAT_COLORS } from '../types';
@@ -59,6 +59,19 @@
   function onLookupBlur() {
     // small delay so click on option fires first
     setTimeout(() => { lookupOpen = false; lookupSearch = ''; }, 150);
+  }
+
+  // Quick search: open the drawer and put the caret straight into the
+  // project lookup (its focus handler opens the dropdown).
+  async function openSearch() {
+    $filterDrawerOpen = true;
+    await tick();
+    // Mirror the input's focus handler explicitly: focus() doesn't fire a
+    // focus event when the window itself isn't focused.
+    lookupSearch = '';
+    $selProject = null;
+    lookupOpen = true;
+    lookupInput?.focus();
   }
 
   function clearAll() {
@@ -143,6 +156,21 @@
     {/if}
   </button>
 
+  <button
+    class="funnel-btn"
+    on:click={openSearch}
+    title="Search project" aria-label="Search project"
+  >
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <circle cx="7" cy="7" r="4.5"/>
+      <line x1="10.5" y1="10.5" x2="14" y2="14"/>
+    </svg>
+  </button>
+
+  {#if activeCount > 0}
+    <button class="btn-clear" on:click={clearAll} title="Clear all filters">✕ Clear all</button>
+  {/if}
+
   {#each chips as chip (chip.key)}
     <span class="chip" style={chip.color ? `background: rgba(${chip.color.rgb}, 0.14); color: ${chip.color.hex};` : ''}>
       {chip.label}
@@ -156,9 +184,6 @@
     <div class="drawer-header">
       <h2>Filters</h2>
       <div class="drawer-actions">
-        {#if activeCount > 0}
-          <button class="btn-clear" on:click={clearAll}>✕ Clear all</button>
-        {/if}
         <button class="icon-btn" on:click={() => $filterDrawerOpen = false} aria-label="Close">✕</button>
       </div>
     </div>
