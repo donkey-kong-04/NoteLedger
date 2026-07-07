@@ -28,7 +28,7 @@ The application is developed using:
 **Icon:** Custom NLedger book icon — dark indigo spine (left), lighter indigo body, pages strip (right), "NLedger" text rotated vertically on body. Source PNG at `src-tauri/icons/app-icon-source.png`.
 
 ## Security
-- **CSP enabled** in `src-tauri/tauri.conf.json` (`app.security.csp` + `devCsp`): scripts/assets restricted to `'self'`, Tauri IPC allowed via `ipc:`/`http://ipc.localhost`, inline `style=` attributes allowed. Tauri auto-adds hashes for its own injected scripts in bundled assets.
+- **CSP enabled** in `src-tauri/tauri.conf.json` (`app.security.csp` + `devCsp`): scripts/assets restricted to `'self'`, Tauri IPC allowed via `ipc:`/`http://ipc.localhost`, inline `style=` attributes allowed. Tauri auto-adds hashes for its own injected scripts in bundled assets. `dangerousDisableAssetCspModification: ["style-src"]` stops Tauri from adding a style hash in release builds — a hash in `style-src` makes WebKit ignore `'unsafe-inline'` (and WKWebView doesn't support `style-src-attr`), which silently blocked all rich-text inline styles (bold/italic/color) in packaged apps. Do not remove without retesting formatting in a packaged build.
 - **HTML sanitization** (`src/lib/sanitize.ts`, DOMPurify): log/project descriptions are stored as rich-text HTML. Every path that turns that HTML into DOM goes through `sanitizeHtml()` — the three `{@html}` render sites (LogCard, ProjectCard, Table view), the RichTextEditor load (`editor.innerHTML`), its `syncValue()` save, and pasted `text/html`. Allowlist: formatting tags, lists, spans/font with `href`/`style`/`color` attributes only.
 - **URL opening** (`openLink()` in `src/lib/types.ts`): only `http:`, `https:` and `mailto:` URLs are passed to the opener plugin; anything else (e.g. `file:`) is refused with a console warning. The capability file grants only `opener:allow-open-url` + default-URL scope.
 - **SQL**: all queries use parameterized statements; the only interpolated identifiers are compile-time constant junction-table names.
@@ -363,12 +363,16 @@ Built on `contenteditable` with `document.execCommand`. Toolbar:
 - **B** / *I* toggle buttons (highlights when active)
 - **Bullet list** / **Numbered list** toggle buttons (highlight when cursor is inside a list; click again to remove)
 - Font size selector (Small / Normal / Large / Huge)
+- **Table** button: opens a hover grid picker (up to 6×6) to choose dimensions; inserts a table whose first row is a header
+- **Clear formatting** button: strips bold/italic/color/font-size from the selection (`removeFormat`); lists and links are kept
 - 8 color swatches
+- When the cursor is inside a table, four contextual buttons appear at the end of the toolbar: **+ Row** (below current), **− Row**, **+ Col** (after current), **− Col**. Removing the last remaining row or column deletes the table.
 
 Additional behaviors:
 - **Pasting a bare URL** (`https://...`) automatically converts it to a clickable `<a>` link
 - **Clicking a link** (Ctrl/Cmd+click in the editor, or click in the log card description) opens it in the system default browser via `opener:allow-default-urls`
-- **Tab** inside a list item indents it (creates a nested sub-list); **Shift+Tab** outdents it. Outside a list, Tab inserts 4 spaces.
+- **Tab** inside a list item indents it (creates a nested sub-list); **Shift+Tab** outdents it. Inside a table, **Tab/Shift+Tab** move to the next/previous cell, and Tab in the last cell appends a new row. Outside both, Tab inserts 4 spaces.
+- Tables are stored as plain `<table>/<tr>/<th>/<td>` HTML (allowed by the DOMPurify sanitizer along with `colspan`/`rowspan`) and rendered with themed borders in the editor, project cards, log cards and table view.
 
 ### Links
 

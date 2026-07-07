@@ -121,6 +121,14 @@
   .desc :global(*) { margin: 0; }
   .desc :global(ul), .desc :global(ol) { padding-left: 18px; margin: 2px 0; }
   .desc :global(li) { margin: 1px 0; }
+  .desc :global(table) { border-collapse: collapse; margin: 3px 0; }
+  .desc :global(th), .desc :global(td) {
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .desc :global(th) { font-weight: 600; }
 
   .card-footer { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .badges-row { display: flex; gap: 4px; flex-wrap: wrap; }

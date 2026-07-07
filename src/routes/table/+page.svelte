@@ -310,6 +310,14 @@
   }
   .log-desc :global(*) { margin: 0; }
   .log-desc :global(ul), .log-desc :global(ol) { padding-left: 16px; }
+  .log-desc :global(table) { border-collapse: collapse; margin: 3px 0; }
+  .log-desc :global(th), .log-desc :global(td) {
+    border: 1px solid var(--border);
+    padding: 2px 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .log-desc :global(th) { font-weight: 600; }
 
   .empty { font-size: 13px; color: var(--text-muted); padding: 20px 0; }
 </style>
