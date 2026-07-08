@@ -345,7 +345,7 @@ Fields:
 - Title (required)
 - Log Type
 - Description (rich text — see Rich Text Editor section)
-- Due Date
+- Due Date, with **quick-date badges** below the picker: `Today · +1 · +2 · +3 · Fri. · Next Mon. · Next Fri.` — one click fills the date field (nothing saved until Save/Create). `+N` = today + N days; `Fri.` = the upcoming Friday (in 7 days if today is Friday); `Next Mon./Fri.` = Monday/Friday of the week starting next Monday. Tooltips show the resolved date. On click the date input flashes accent-colored for 300ms as feedback. Dates are computed in local time (not UTC) to avoid day-shift near midnight.
 - Status (open/closed toggle)
 - Project (dropdown — required; every log must belong to a project)
 - Categories — 2×2 grid of badge toggles, one group per category; multiple values selectable per category; values sorted alphabetically; **"+ Add" button in each group** to create new category values on the fly (auto-selected after creation, race-condition safe via `pendingAdd` promise tracking)

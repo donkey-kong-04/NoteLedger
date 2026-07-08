@@ -43,6 +43,43 @@
   let dueDateStr = draft.due_date ?? '';
   let confirmDelete = false;
 
+  // ── Quick due-date badges ──────────────────────────────────────────────
+  // Local date, not toISOString(): UTC would shift the day near midnight.
+  function fmtLocal(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  function plusDays(n: number): string {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return fmtLocal(d);
+  }
+  // Days until the next `dow` (0=Sun..6=Sat), always in the future (never 0).
+  function daysUntilNext(dow: number): number {
+    return ((dow - new Date().getDay() + 7) % 7) || 7;
+  }
+  // Weeks start on Monday: "next week X" = X of the week starting next Monday.
+  const nextMonday = daysUntilNext(1);
+
+  // Briefly highlight the date input after a quick-date click so the eye is
+  // drawn to the changed value; no persistent selected state on the badges.
+  let dateFlash = false;
+  let flashTimer: ReturnType<typeof setTimeout>;
+  function pickQuickDate(q: { label: string; value: string }) {
+    dueDateStr = q.value;
+    dateFlash = true;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => dateFlash = false, 300);
+  }
+  const QUICK_DATES = [
+    { label: 'Today',   title: 'Today',            value: plusDays(0) },
+    { label: '+1',      title: 'Tomorrow',         value: plusDays(1) },
+    { label: '+2',      title: 'In 2 days',        value: plusDays(2) },
+    { label: '+3',      title: 'In 3 days',        value: plusDays(3) },
+    { label: 'Fri.',      title: 'This Friday',      value: plusDays(daysUntilNext(5)) },
+    { label: 'Next Mon.', title: 'Next week Monday', value: plusDays(nextMonday) },
+    { label: 'Next Fri.', title: 'Next week Friday', value: plusDays(nextMonday + 4) },
+  ];
+
   function toggleCat(slot: 1|2|3|4, id: number) {
     const key = `category${slot}_ids` as const;
     const cur = draft[key];
@@ -142,7 +179,17 @@ if (isNew) {
     <div class="field-row">
       <div class="field">
         <label>Due Date</label>
-        <input type="date" bind:value={dueDateStr} />
+        <input type="date" bind:value={dueDateStr} class:date-flash={dateFlash} />
+        <div class="quick-dates">
+          {#each QUICK_DATES as q}
+            <button
+              type="button"
+              class="quick-date-btn"
+              title="{q.title} ({q.value})"
+              on:click={() => pickQuickDate(q)}
+            >{q.label}</button>
+          {/each}
+        </div>
       </div>
       <div class="field">
         <label>Status</label>
@@ -300,6 +347,30 @@ if (isNew) {
   }
   input:focus, textarea:focus, select:focus { border-color: var(--accent); }
   textarea { resize: vertical; min-height: 90px; }
+
+  .quick-dates {
+    display: flex; flex-wrap: wrap; gap: 4px;
+    margin-top: 2px;
+  }
+  .quick-date-btn {
+    font-size: 10px; font-weight: 600;
+    color: var(--text-muted);
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 999px;
+    padding: 2px 7px;
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: color 0.1s, border-color 0.1s, background 0.1s;
+  }
+  .quick-date-btn:hover { color: var(--text); border-color: var(--text-muted); }
+  input.date-flash {
+    border-color: var(--accent);
+    background: rgba(99,102,241,0.10);
+    color: var(--accent);
+    font-weight: 600;
+  }
 
   .toggle-row {
     display: flex; align-items: center; gap: 8px;
