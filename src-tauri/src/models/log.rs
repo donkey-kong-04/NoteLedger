@@ -6,6 +6,8 @@ pub struct Log {
     pub type_id: i64,
     pub title: String,
     pub description: String,
+    #[serde(default)]
+    pub closed_description: String,
     pub start_date: String,
     pub due_date: Option<String>,
     pub is_closed: bool,

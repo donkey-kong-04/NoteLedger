@@ -42,6 +42,7 @@ export interface Log {
   type_id: number;
   title: string;
   description: string;
+  closed_description: string;
   start_date: string;
   due_date: string | null;
   is_closed: boolean;
@@ -51,6 +52,13 @@ export interface Log {
   category2_ids: number[];
   category3_ids: number[];
   category4_ids: number[];
+}
+
+// Rich-text fields keep markup like "<p><br></p>" after being emptied, so a
+// plain truthiness check would show empty sections; look for actual text.
+export function hasRichText(html: string | null | undefined): boolean {
+  if (!html) return false;
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
 }
 
 import { openUrl } from '@tauri-apps/plugin-opener';

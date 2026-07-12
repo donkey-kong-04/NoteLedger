@@ -6,7 +6,7 @@
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
   import LinkEditor from '$lib/components/LinkEditor.svelte';
-  import { settings, picklists, projects, logs, projectLinks, loadAll, pendingProjectFocus, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
+  import { settings, picklists, projects, logs, projectLinks, loadAll, pendingProjectFocus, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { logMatchesSlot, computeVisibility } from '$lib/filters';
   import { densityStyle as densityStyleFor } from '$lib/density';
@@ -165,6 +165,9 @@
       <FilterPanel />
     </div>
     <nav class="menu-nav">
+      <button class="btn-secondary-sm" class:toggle-on={$expandClosedPoints} on:click={() => $expandClosedPoints = !$expandClosedPoints}>
+        {$expandClosedPoints ? '▾' : '▸'} Closed points
+      </button>
       <button class="btn-secondary-sm" on:click={toggleFoldAll}>{allCollapsed ? '▸ Unfold all' : '▾ Fold all'}</button>
       <button class="btn-secondary-sm" on:click={openNewProject}>+ New Project</button>
     </nav>
@@ -305,6 +308,7 @@
     text-decoration: none; display: inline-flex; align-items: center;
   }
   .btn-secondary-sm:hover { background: var(--surface-2); color: var(--text); }
+  .btn-secondary-sm.toggle-on { color: var(--accent); border-color: var(--accent); }
 
   .cards {
     flex: 1; overflow-y: auto;

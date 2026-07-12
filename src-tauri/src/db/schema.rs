@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 
 /// The schema version this build migrates up to. Bump this whenever a new
 /// `if version < N` block is added below.
-pub const LATEST_VERSION: i64 = 10;
+pub const LATEST_VERSION: i64 = 11;
 
 pub fn migrate(conn: &Connection) -> Result<()> {
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -260,6 +260,15 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         conn.execute_batch("
             ALTER TABLE projects ADD COLUMN is_template BOOLEAN NOT NULL DEFAULT 0;
             PRAGMA user_version = 10;
+        ")?;
+    }
+
+    if version < 11 {
+        // UI shows `description` as "Open Points" and this new column as
+        // "Closed Points"; existing descriptions are left in place.
+        conn.execute_batch("
+            ALTER TABLE logs ADD COLUMN closed_description TEXT;
+            PRAGMA user_version = 11;
         ")?;
     }
 

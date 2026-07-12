@@ -34,6 +34,7 @@ fn log(project_id: i64) -> Log {
         type_id: 1, // seeded "Task" log type
         title: "T".into(),
         description: "d".into(),
+        closed_description: String::new(),
         start_date: "2026-01-01".into(),
         due_date: None,
         is_closed: false,

@@ -228,8 +228,8 @@ fn clone_node(conn: &Connection, src_id: i64, new_parent: Option<i64>, title_ove
     for (lid, due_date) in log_rows {
         let new_due = due_date.as_deref().map(|d| shift_date(d, log_shift_days));
         conn.execute(
-            "INSERT INTO logs (type_id, title, description, start_date, due_date, is_closed, closed_date, project_id)
-             SELECT type_id, title, description, ?1, ?2, is_closed, closed_date, ?3 FROM logs WHERE id = ?4",
+            "INSERT INTO logs (type_id, title, description, start_date, due_date, is_closed, closed_date, project_id, closed_description)
+             SELECT type_id, title, description, ?1, ?2, is_closed, closed_date, ?3, closed_description FROM logs WHERE id = ?4",
             params![today.to_string(), new_due, new_id, lid],
         )?;
         let new_log_id = conn.last_insert_rowid();

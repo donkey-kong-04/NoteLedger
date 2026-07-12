@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { logs, projects, picklists, settings, loadAll, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
-  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel } from '$lib/types';
+  import { logs, projects, picklists, settings, loadAll, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
+  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, hasRichText } from '$lib/types';
   import type { Log, Project, PicklistValue } from '$lib/types';
   import Badge from '$lib/components/Badge.svelte';
   import FilterPanel from '$lib/components/FilterPanel.svelte';
@@ -14,6 +14,19 @@
   onMount(() => loadAll());
 
   $: pageDensityStyle = densityStyle($settings.density);
+
+  // "See more/less" clicks are per-log exceptions to the global toggle;
+  // flipping the toggle clears them so it always hides/shows everything.
+  let closedPointsOverride = new Set<number>();
+  let lastExpandAll = $expandClosedPoints;
+  $: if ($expandClosedPoints !== lastExpandAll) {
+    lastExpandAll = $expandClosedPoints;
+    closedPointsOverride = new Set();
+  }
+  function toggleClosedPoints(id: number) {
+    closedPointsOverride.has(id) ? closedPointsOverride.delete(id) : closedPointsOverride.add(id);
+    closedPointsOverride = closedPointsOverride;
+  }
 
   let editorLog: Log | null = null;
   let showLogEditor = false;
@@ -134,6 +147,9 @@
 <div class="page" style={pageDensityStyle}>
   <header class="page-header">
     <FilterPanel />
+    <button class="cp-toggle" class:toggle-on={$expandClosedPoints} on:click={() => $expandClosedPoints = !$expandClosedPoints}>
+      {$expandClosedPoints ? '▾' : '▸'} Closed points
+    </button>
   </header>
 
   <div class="table-wrap">
@@ -197,6 +213,16 @@
                 {#if log.description}
                   <div class="log-desc" on:click={handleLinkClick}>{@html sanitizeHtml(log.description)}</div>
                 {/if}
+                {#if hasRichText(log.closed_description)}
+                  {@const cpOpen = closedPointsOverride.has(log.id) ? !$expandClosedPoints : $expandClosedPoints}
+                  <div class="closed-points-sep"></div>
+                  <button class="closed-points-more" on:click|stopPropagation={() => toggleClosedPoints(log.id)}>
+                    {cpOpen ? 'See less' : 'See more…'}
+                  </button>
+                  {#if cpOpen}
+                    <div class="log-desc closed-points" on:click={handleLinkClick}>{@html sanitizeHtml(log.closed_description)}</div>
+                  {/if}
+                {/if}
               </td>
             </tr>
           {/each}
@@ -243,6 +269,17 @@
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
+
+  .cp-toggle {
+    margin-left: auto;
+    background: none; color: var(--text-muted);
+    border: 1px solid var(--border); border-radius: 10px;
+    padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    font-family: inherit; transition: background 0.15s, color 0.15s;
+    display: inline-flex; align-items: center;
+  }
+  .cp-toggle:hover { background: var(--surface-2); color: var(--text); }
+  .cp-toggle.toggle-on { color: var(--accent); border-color: var(--accent); }
 
   .table-wrap {
     flex: 1;
@@ -318,6 +355,26 @@
     vertical-align: top;
   }
   .log-desc :global(th) { font-weight: 600; }
+
+  .closed-points-sep {
+    border-top: 1px solid var(--border);
+    margin-top: 6px;
+  }
+  .closed-points-more {
+    display: block;
+    font-size: 11px; font-style: italic;
+    color: var(--text-muted);
+    background: none; border: none;
+    padding: 0; margin-top: 4px;
+    cursor: pointer; font-family: inherit;
+    transition: color 0.1s;
+  }
+  .closed-points-more:hover { color: var(--text); text-decoration: underline; }
+  .log-desc.closed-points {
+    margin-top: 3px; padding-left: 8px;
+    border-left: 2px solid var(--border);
+    opacity: 0.85;
+  }
 
   .empty { font-size: 13px; color: var(--text-muted); padding: 20px 0; }
 </style>

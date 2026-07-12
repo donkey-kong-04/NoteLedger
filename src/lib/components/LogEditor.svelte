@@ -27,6 +27,7 @@
     type_id: logTypes[0]?.id ?? 0,
     title: '',
     description: '',
+    closed_description: '',
     start_date: '',
     due_date: null,
     is_closed: false,
@@ -88,9 +89,9 @@
   }
 
   async function save() {
-    if (!draft.title.trim() || !draft.project_id) return;
+    if (!draft.title.trim() || !draft.project_id || !dueDateStr) return;
     await pendingAdd;
-    draft.due_date = dueDateStr || null;
+    draft.due_date = dueDateStr;
 if (isNew) {
       const created = await createLog(draft);
       dispatch('created', created);
@@ -140,9 +141,11 @@ if (isNew) {
     // No match → create new and select
     addDraft[slot] = '';
     showAddInput[slot] = false;
+    // Swallow failures: a failed picklist create must not leave a rejected
+    // pendingAdd behind, which would make every subsequent save() throw.
     const p = createPicklistValue(`category_${slot}`, trimmed).then(newVal => {
       toggleCat(slot, newVal.id);
-    });
+    }).catch(e => console.error('createPicklistValue failed:', e));
     pendingAdd = p;
     await p;
   }
@@ -157,29 +160,25 @@ if (isNew) {
   </div>
 
   <div class="panel-body">
-    <div class="field">
-      <label>Title <span class="req">*</span></label>
-      <input bind:value={draft.title} placeholder="What happened?" />
-    </div>
-
-    <div class="field">
-      <label>Log Type <span class="req">*</span></label>
-      <select bind:value={draft.type_id}>
-        {#each logTypes as lt}
-          <option value={lt.id}>{lt.label}</option>
-        {/each}
-      </select>
-    </div>
-
-    <div class="field">
-      <label>Description</label>
-      <RichTextEditor bind:value={draft.description} />
+    <div class="field-row">
+      <div class="field">
+        <label>Title <span class="req">*</span></label>
+        <input bind:value={draft.title} class:invalid={!draft.title.trim()} placeholder="What happened?" />
+      </div>
+      <div class="field">
+        <label>Log Type <span class="req">*</span></label>
+        <select bind:value={draft.type_id} class:invalid={!draft.type_id}>
+          {#each logTypes as lt}
+            <option value={lt.id}>{lt.label}</option>
+          {/each}
+        </select>
+      </div>
     </div>
 
     <div class="field-row">
       <div class="field">
-        <label>Due Date</label>
-        <input type="date" bind:value={dueDateStr} class:date-flash={dateFlash} />
+        <label>Due Date <span class="req">*</span></label>
+        <input type="date" bind:value={dueDateStr} class:date-flash={dateFlash} class:invalid={!dueDateStr} />
         <div class="quick-dates">
           {#each QUICK_DATES as q}
             <button
@@ -198,20 +197,6 @@ if (isNew) {
           <span>Closed</span>
         </label>
       </div>
-    </div>
-
-    <div class="field">
-      <label>Project <span class="req">*</span></label>
-      <select
-        value={String(draft.project_id)}
-        on:change={e => {
-          draft = { ...draft, project_id: Number((e.target as HTMLSelectElement).value) };
-        }}
-      >
-        {#each sortedProjectOptions(allProjects) as p}
-          <option value={String(p.id)}>{p.label}</option>
-        {/each}
-      </select>
     </div>
 
     <div class="section-title">Categories</div>
@@ -256,6 +241,31 @@ if (isNew) {
         </div>
       {/each}
     </div>
+
+    <div class="field">
+      <label>Open Points</label>
+      <RichTextEditor bind:value={draft.description} />
+    </div>
+
+    <div class="field">
+      <label>Closed Points</label>
+      <RichTextEditor bind:value={draft.closed_description} />
+    </div>
+
+    <div class="field">
+      <label>Project <span class="req">*</span></label>
+      <select
+        value={String(draft.project_id)}
+        class:invalid={!draft.project_id}
+        on:change={e => {
+          draft = { ...draft, project_id: Number((e.target as HTMLSelectElement).value) };
+        }}
+      >
+        {#each sortedProjectOptions(allProjects) as p}
+          <option value={String(p.id)}>{p.label}</option>
+        {/each}
+      </select>
+    </div>
   </div>
 
   <div class="panel-footer">
@@ -266,7 +276,7 @@ if (isNew) {
     {/if}
     <div class="spacer"></div>
     <button class="btn-secondary" on:click={close}>Cancel</button>
-    <button class="btn-primary" on:click={save} disabled={!draft.title.trim() || !draft.project_id}>
+    <button class="btn-primary" on:click={save} disabled={!draft.title.trim() || !draft.project_id || !dueDateStr}>
       {isNew ? 'Create' : 'Save'}
     </button>
   </div>
@@ -346,6 +356,7 @@ if (isNew) {
     box-sizing: border-box;
   }
   input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  input.invalid, select.invalid { border-color: #ef4444; }
   textarea { resize: vertical; min-height: 90px; }
 
   .quick-dates {

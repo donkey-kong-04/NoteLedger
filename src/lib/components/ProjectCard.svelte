@@ -1,7 +1,8 @@
 <script lang="ts">
   import Badge from './Badge.svelte';
   import { createEventDispatcher } from 'svelte';
-  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel } from '../types';
+  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, hasRichText } from '../types';
+  import { expandClosedPoints } from '../store';
   import type { Log, Project, PicklistValue, ProjectLink } from '../types';
   import { openLink } from '../types';
   import { sanitizeHtml } from '../sanitize';
@@ -88,6 +89,19 @@
   }
 
   $: ownLinks = allLinks.filter(l => l.project_id === project.id);
+
+  // "See more/less" clicks are per-log exceptions to the global toggle;
+  // flipping the toggle clears them so it always hides/shows everything.
+  let closedPointsOverride = new Set<number>();
+  let lastExpandAll = $expandClosedPoints;
+  $: if ($expandClosedPoints !== lastExpandAll) {
+    lastExpandAll = $expandClosedPoints;
+    closedPointsOverride = new Set();
+  }
+  function toggleClosedPoints(id: number) {
+    closedPointsOverride.has(id) ? closedPointsOverride.delete(id) : closedPointsOverride.add(id);
+    closedPointsOverride = closedPointsOverride;
+  }
 </script>
 
 <!-- The node wraps the card and its sub-tree so connector lines can be drawn
@@ -192,6 +206,16 @@
                     <td class="col-desc">
                       {#if log.description}
                         <div class="log-desc" on:click={handleLinkClick}>{@html sanitizeHtml(log.description)}</div>
+                      {/if}
+                      {#if hasRichText(log.closed_description)}
+                        {@const cpOpen = closedPointsOverride.has(log.id) ? !$expandClosedPoints : $expandClosedPoints}
+                        <div class="closed-points-sep"></div>
+                        <button class="closed-points-more" on:click|stopPropagation={() => toggleClosedPoints(log.id)}>
+                          {cpOpen ? 'See less' : 'See more…'}
+                        </button>
+                        {#if cpOpen}
+                          <div class="log-desc closed-points" on:click={handleLinkClick}>{@html sanitizeHtml(log.closed_description)}</div>
+                        {/if}
                       {/if}
                     </td>
                   </tr>
@@ -461,6 +485,26 @@
     vertical-align: top;
   }
   .log-desc :global(th) { font-weight: 600; }
+
+  .closed-points-sep {
+    border-top: 1px solid var(--border);
+    margin-top: 6px;
+  }
+  .closed-points-more {
+    display: block;
+    font-size: 11px; font-style: italic;
+    color: var(--text-muted);
+    background: none; border: none;
+    padding: 0; margin-top: 4px;
+    cursor: pointer; font-family: inherit;
+    transition: color 0.1s;
+  }
+  .closed-points-more:hover { color: var(--text); text-decoration: underline; }
+  .log-desc.closed-points {
+    margin-top: 3px; padding-left: 8px;
+    border-left: 2px solid var(--border);
+    opacity: 0.85;
+  }
 
   .empty {
     font-size: 12px; color: var(--text-muted);

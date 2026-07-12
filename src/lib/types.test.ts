@@ -13,7 +13,7 @@ function isoDaysAgo(n: number): string {
 
 function log(start_date: string, is_closed = false): Log {
   return {
-    id: 1, type_id: 1, title: 'T', description: '', start_date,
+    id: 1, type_id: 1, title: 'T', description: '', closed_description: '', start_date,
     due_date: null, is_closed, closed_date: null, project_id: 1,
     category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [],
   };

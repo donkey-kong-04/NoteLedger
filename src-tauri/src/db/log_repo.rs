@@ -18,7 +18,7 @@ fn sync_cat(conn: &Connection, table: &str, log_id: i64, ids: &[i64]) -> Result<
 pub fn list(conn: &Connection) -> Result<Vec<Log>> {
     let mut stmt = conn.prepare(
         "SELECT id, type_id, title, description, start_date, due_date,
-                is_closed, closed_date, project_id
+                is_closed, closed_date, project_id, closed_description
          FROM logs ORDER BY start_date DESC"
     )?;
     let logs: Vec<Log> = stmt.query_map([], |row| {
@@ -32,6 +32,7 @@ pub fn list(conn: &Connection) -> Result<Vec<Log>> {
             is_closed:    row.get(6)?,
             closed_date:  row.get(7)?,
             project_id:   row.get(8)?,
+            closed_description: row.get::<_, Option<String>>(9)?.unwrap_or_default(),
             category1_ids: vec![],
             category2_ids: vec![],
             category3_ids: vec![],
@@ -70,11 +71,12 @@ pub fn insert(conn: &Connection, log: &Log) -> Result<i64> {
     let tx = conn.unchecked_transaction()?;
     tx.execute(
         "INSERT INTO logs (type_id, title, description, start_date, due_date,
-                           is_closed, closed_date, project_id)
-         VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+                           is_closed, closed_date, project_id, closed_description)
+         VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
         params![
             log.type_id, log.title, log.description, log.start_date,
             log.due_date, log.is_closed, log.closed_date, log.project_id,
+            log.closed_description,
         ],
     )?;
     let id = tx.last_insert_rowid();
@@ -91,12 +93,12 @@ pub fn update(conn: &Connection, log: &Log) -> Result<()> {
     tx.execute(
         "UPDATE logs SET
             type_id=?1, title=?2, description=?3, due_date=?4,
-            is_closed=?5, closed_date=?6, project_id=?7
-         WHERE id=?8",
+            is_closed=?5, closed_date=?6, project_id=?7, closed_description=?8
+         WHERE id=?9",
         params![
             log.type_id, log.title, log.description, log.due_date,
             log.is_closed, log.closed_date, log.project_id,
-            log.id,
+            log.closed_description, log.id,
         ],
     )?;
     let cat_ids = [&log.category1_ids, &log.category2_ids, &log.category3_ids, &log.category4_ids];

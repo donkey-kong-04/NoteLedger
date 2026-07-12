@@ -37,12 +37,12 @@ The application is developed using:
 - **Rust:** `cd src-tauri && cargo test --lib` — in-memory SQLite tests covering migrations and repository data-integrity rules (`src-tauri/src/db/tests.rs`).
 - **Frontend:** `npm test` (vitest) — pure filter/visibility logic extracted to `src/lib/filters.ts` (`src/lib/filters.test.ts`).
 - **Type-check:** `npm run check` (svelte-check) must report 0 errors.
-- CI (`.github/workflows/build.yml`) runs all three in a `test` job that must pass before the Windows `build` job produces the installer artifact.
+- CI (`.github/workflows/build.yml`) runs all three in `frontend`/`rust` jobs that must pass before the `build` matrix job produces installer artifacts for **Windows (MSI/NSIS), macOS (DMG, Apple Silicon) and Linux (deb/AppImage, ubuntu-22.04)**.
 
 # Data Model
 
 ### DB Migration versioning
-Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **10** (tracked by `schema::LATEST_VERSION`).
+Schema is managed via `PRAGMA user_version` in `src-tauri/src/db/schema.rs`. Each migration block runs only once per database file. Current version: **11** (tracked by `schema::LATEST_VERSION`).
 
 Before any pending migration runs, `db::open` copies the existing database file to `note_ledger.db.backup-v{N}-{timestamp}` (same folder as the DB) and **verifies** the copy (size match + backup opens as SQLite at the expected schema version). If the WAL flush, copy, or verification fails, **the app refuses to start and the migration does not run** — the database is left untouched, and a `STARTUP-ERROR.txt` explaining the reason is written next to the DB (a bundled app has no console). Skipped for a brand-new database or one already at the latest version.
 
@@ -122,9 +122,10 @@ A single log entry.
 | id | INTEGER | No | autoincrement | Primary key |
 | type_id | INTEGER | No | — | FK → user_customizable_input.id (log_type) |
 | title | TEXT(255) | No | — | Title of the log |
-| description | TEXT | Yes | NULL | Rich text description (HTML from contenteditable) |
+| description | TEXT | Yes | NULL | Rich text "Open Points" (HTML from contenteditable; shown as **Open Points** in the UI) |
+| closed_description | TEXT | Yes | NULL | Rich text "Closed Points" (added in migration v11; hidden by default in views, expandable) |
 | start_date | DATE | No | current date | Set automatically at creation |
-| due_date | DATE | Yes | NULL | Optional due date |
+| due_date | DATE | Yes | NULL | Due date — nullable in the DB (legacy rows), but **mandatory in the Log Editor**: existing logs without one must get a due date on their next edit |
 | is_closed | BOOLEAN | No | FALSE | Whether the log is closed |
 | closed_date | DATE | Yes | NULL | Auto-set when closed; reset to NULL when re-opened |
 | project_id | INTEGER | No | — | FK → projects.id (required — every log must belong to a project) |
@@ -341,14 +342,17 @@ At `/templates`, via the **Templates** tab. Behaves like the homepage — same p
 
 ### Log Editor (slide-in panel, 780px wide)
 
-Fields:
-- Title (required)
-- Log Type
-- Description (rich text — see Rich Text Editor section)
-- Due Date, with **quick-date badges** below the picker: `Today · +1 · +2 · +3 · Fri. · Next Mon. · Next Fri.` — one click fills the date field (nothing saved until Save/Create). `+N` = today + N days; `Fri.` = the upcoming Friday (in 7 days if today is Friday); `Next Mon./Fri.` = Monday/Friday of the week starting next Monday. Tooltips show the resolved date. On click the date input flashes accent-colored for 300ms as feedback. Dates are computed in local time (not UTC) to avoid day-shift near midnight.
-- Status (open/closed toggle)
-- Project (dropdown — required; every log must belong to a project)
-- Categories — 2×2 grid of badge toggles, one group per category; multiple values selectable per category; values sorted alphabetically; **"+ Add" button in each group** to create new category values on the fly (auto-selected after creation, race-condition safe via `pendingAdd` promise tracking)
+Fields, in layout order:
+- Row 1 — **Title** (required) / **Log Type** (required)
+- Row 2 — **Due Date** (required) / **Status** (open/closed toggle). Due Date has **quick-date badges** below the picker: `Today · +1 · +2 · +3 · Fri. · Next Mon. · Next Fri.` — one click fills the date field (nothing saved until Save/Create). `+N` = today + N days; `Fri.` = the upcoming Friday (in 7 days if today is Friday); `Next Mon./Fri.` = Monday/Friday of the week starting next Monday. Tooltips show the resolved date. On click the date input flashes accent-colored for 300ms as feedback. Dates are computed in local time (not UTC) to avoid day-shift near midnight.
+- **Categories** — 2×2 grid of badge toggles, one group per category; multiple values selectable per category; values sorted alphabetically; **"+ Add" button in each group** to create new category values on the fly (auto-selected after creation, race-condition safe via `pendingAdd` promise tracking; a failed creation is caught so it can't break Save)
+- **Open Points** (rich text — see Rich Text Editor section; the log's main description, DB column `description`)
+- **Closed Points** (rich text; DB column `closed_description`) — notes on resolved/done items, hidden by default in the views (see below)
+- **Project** (dropdown — required; last because it's usually preselected from context)
+
+Validation: **Title, Log Type, Due Date and Project are mandatory** — empty mandatory inputs get a red border, and Save/Create stays disabled until all are filled. Due Date is enforced UI-side only: legacy logs without one keep their NULL until edited, at which point a date must be set.
+
+**Closed Points in the views** (project card log tables and Table view): when a log has Closed Points content, a thin separator line and an italic "**See more…**" link render below the open points. Clicking it expands the closed points inline (indented, left-bordered) and turns into "See less"; clicking doesn't open the Log Editor. A global "**▸/▾ Closed points**" toggle button (Project view header next to Fold all; Table view header right side) expands/collapses closed points for **all** logs — flipping it clears any per-log See more/less choices (they act as exceptions on top of the global state). The toggle is shared between both views via the `expandClosedPoints` store (in-memory, resets on restart). Empty-but-saved rich text (e.g. `<p><br></p>`) is not treated as content (`hasRichText()` in `types.ts`).
 
 ### Project Editor (slide-in panel, 480px wide)
 

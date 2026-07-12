@@ -32,6 +32,7 @@ function log(id: number, project_id: number, extra: Partial<Log> = {}): Log {
     type_id: 1,
     title: `L${id}`,
     description: '',
+    closed_description: '',
     start_date: '2026-01-01',
     due_date: null,
     is_closed: false,

@@ -23,6 +23,8 @@ export const pendingProjectFocus = writable<number | null>(null);
 // Filter state, shared between the Home and Table views so switching pages
 // keeps the same filters applied.
 export const showClosed = writable(false);
+// UI-only: expand every log's "Closed Points" section instead of per-log clicks.
+export const expandClosedPoints = writable(false);
 export const selCat1 = writable<number[]>([]);
 export const selCat2 = writable<number[]>([]);
 export const selCat3 = writable<number[]>([]);
@@ -94,6 +96,8 @@ export async function saveSettings(s: UserSettings) {
 
 export async function createPicklistValue(picklist_type: string, label: string) {
   const val = await invoke<PicklistValue>('create_picklist_value', { picklistType: picklist_type, label });
+  // A null/malformed value in the store would crash every picklist consumer.
+  if (!val?.id) throw new Error(`create_picklist_value returned no value for "${label}"`);
   picklists.update(p => [...p, val]);
   return val;
 }
