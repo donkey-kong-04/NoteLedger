@@ -25,6 +25,7 @@
   .app-shell {
     --accent:       #6366f1;
     --accent-muted: #a5b4fc;
+    --link:         #2563eb;
     --text:         #111827;
     --text-muted:   #6b7280;
     --surface:      #ffffff;
@@ -84,6 +85,7 @@
   }
 
   .app-shell.dark {
+    --link:         #60a5fa;
     --text:         #f3f4f6;
     --text-muted:   #9ca3af;
     --surface:      #111827;

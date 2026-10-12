@@ -182,6 +182,7 @@ All filters live in a single component, `FilterPanel.svelte`, used by both the P
    - The query is split on whitespace into **tokens**; each token matches **case-insensitively as a substring** — `abc ghi` matches "abc def ghi" and also "abcdefghi". Duplicate tokens are ignored; regex characters are literal.
    - **AND logic at the log level**: a log is shown only if **every** token is found, but each token may sit in **any** of the three fields (one in the title, another in the open points, another in the closed points is a match). A single token never matches across two fields.
    - It combines with all other filters (AND). In the Project view, projects with no matching logs are hidden while a search is active (like a category filter).
+   - **Closed items are always searched**: while a search is active, closed logs (Table view) and closed projects (Project view) are included regardless of the "Show closed" toggle — only those with a matching log appear, still greyed out as closed. The toggle itself is left untouched.
    - **Highlighting**: every occurrence of every token is wrapped in a yellow `<mark class="search-hit">` (global style in `+layout.svelte`, same yellow + dark text in both themes) — in log titles and inside the open/closed points rich text, in both views. Overlapping tokens merge into one highlight; a match spanning formatting (e.g. a half-bold word) is still highlighted. Highlighting is done after sanitizing, with DOM APIs (no markup injected). Not applied on the Templates page.
    - **Closed points auto-expand**: while a search is active, every log's Closed Points are shown (the global **Closed points** toggle switches on, per-log See more/less exceptions are reset), whether or not a token matched there. Clearing the search restores the previous toggle state; the toggle and See less still work during a search.
    - **×** button inside the input (or **Escape**) clears the search. The search is shared between the Project and Table views, cleared by **Clear all**, and cleared when a newly created project/log is focused.
@@ -370,6 +371,8 @@ Fields:
 - Delete (blocked if sub-projects or logs exist — move or delete the logs first)
 
 ### Rich Text Editor
+
+**Link color**: links inside rich text (log open/closed points in the Project and Table views, and inside the editor) use a theme token `--link` defined in `+layout.svelte` — blue `#2563eb` in light mode, light blue `#60a5fa` in dark mode (the browser default dark blue was unreadable on the dark background). Applied with `!important` so links pasted with an inline color (e.g. Outlook's dark blue) follow the theme too.
 
 Built on `contenteditable` with `document.execCommand`. Toolbar:
 - **B** / *I* toggle buttons (highlights when active)

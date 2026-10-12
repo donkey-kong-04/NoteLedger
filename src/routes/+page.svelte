@@ -6,7 +6,7 @@
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
   import LinkEditor from '$lib/components/LinkEditor.svelte';
-  import { settings, picklists, projects, logs, projectLinks, loadAll, pendingProjectFocus, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchQuery, searchTokens } from '$lib/store';
+  import { settings, picklists, projects, logs, projectLinks, loadAll, pendingProjectFocus, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchQuery, searchTokens, searchActive } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { logMatchesSlot, computeVisibility } from '$lib/filters';
   import { logMatchesSearch } from '$lib/search';
@@ -91,8 +91,12 @@
 
   // ── Project visibility ───────────────────────────────────────────────────
 
+  // A log search always looks in closed projects too (only those with a
+  // matching log show up, since a search counts as a log filter).
+  $: includeClosed = $showClosed || $searchActive;
+
   $: ({ visible: visibleProjectIds, ancestorOnly: ancestorOnlyProjectIds } =
-    computeVisibility(visProjects, matchingLogs, $selProject, $showClosed, noLogFilter));
+    computeVisibility(visProjects, matchingLogs, $selProject, includeClosed, noLogFilter));
 
   $: topLevelProjects = visProjects.filter(p => p.parent_id == null);
   $: visibleTopLevelProjects = topLevelProjects.filter(p => visibleProjectIds.has(p.id));
@@ -189,7 +193,7 @@
             allLinks={$projectLinks}
             {visibleProjectIds}
             {ancestorOnlyProjectIds}
-            showClosed={$showClosed}
+            showClosed={includeClosed}
             {collapseSignal}
             collapseAll={allCollapsed}
             depth={0}

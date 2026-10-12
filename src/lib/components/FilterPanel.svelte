@@ -178,6 +178,7 @@
       placeholder="Search logs…"
       title="Search log titles, open points and closed points — every word must appear somewhere in the log"
       aria-label="Search logs"
+      autocomplete="off" autocapitalize="off" spellcheck="false"
       bind:value={$searchQuery}
       on:keydown={e => { if (e.key === 'Escape') { $searchQuery = ''; e.currentTarget.blur(); } }}
     />

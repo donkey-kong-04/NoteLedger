@@ -564,6 +564,8 @@
     outline: none;
     overflow-y: auto;
   }
+  /* Same theme-aware link color as the log views (see ProjectCard). */
+  .editor :global(a) { color: var(--link) !important; }
   .editor:empty::before {
     content: attr(placeholder);
     color: var(--text-muted);

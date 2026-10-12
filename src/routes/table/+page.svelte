@@ -124,9 +124,10 @@
 
   // Same filter semantics as the homepage; "Show closed" here reveals closed
   // logs (the page is log-centric, hidden-by-default like closed projects).
+  // A log search always looks in closed logs too.
   $: matchingLogs = $logs.filter(l =>
     !templateProjectIds.has(Number(l.project_id)) &&
-    ($showClosed || !l.is_closed) &&
+    ($showClosed || $searchActive || !l.is_closed) &&
     (selProjectIds === null || selProjectIds.has(Number(l.project_id))) &&
     ($selLogType === null || l.type_id === $selLogType) &&
     logMatchesSlot(l, 1, $selCat1, nonTemplateProjects) &&
@@ -350,6 +351,9 @@
     vertical-align: top;
   }
   .log-desc :global(th) { font-weight: 600; }
+  /* Links follow the theme; !important beats the inline dark blue that links
+     pasted from Outlook/Teams often carry, unreadable in dark mode. */
+  .log-desc :global(a) { color: var(--link) !important; }
 
   .closed-points-sep {
     border-top: 1px solid var(--border);

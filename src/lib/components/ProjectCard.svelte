@@ -493,6 +493,9 @@
     vertical-align: top;
   }
   .log-desc :global(th) { font-weight: 600; }
+  /* Links follow the theme; !important beats the inline dark blue that links
+     pasted from Outlook/Teams often carry, unreadable in dark mode. */
+  .log-desc :global(a) { color: var(--link) !important; }
 
   .closed-points-sep {
     border-top: 1px solid var(--border);
