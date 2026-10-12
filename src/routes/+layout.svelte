@@ -76,6 +76,13 @@
   }
   .page-slot > :global(*) { flex: 1; min-height: 0; }
 
+  /* Log search hits (titles, open/closed points) — same yellow in both themes. */
+  :global(mark.search-hit) {
+    background: #fde047;
+    color: #111827;
+    border-radius: 2px;
+  }
+
   .app-shell.dark {
     --text:         #f3f4f6;
     --text-muted:   #9ca3af;

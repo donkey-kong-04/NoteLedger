@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { daysSince, openSinceLabel } from './types';
+import { daysSince, openSinceLabel, compareLogs } from './types';
 import type { Log } from './types';
 
 function isoDaysAgo(n: number): string {
@@ -41,5 +41,22 @@ describe('openSinceLabel', () => {
 
   it('is empty for closed logs', () => {
     expect(openSinceLabel(log(isoDaysAgo(5), true))).toBe('');
+  });
+});
+
+describe('compareLogs', () => {
+  const mk = (id: number, due_date: string | null, is_closed: boolean): Log =>
+    ({ ...log('2026-01-01', is_closed), id, due_date });
+
+  it('orders open by due ASC, then closed by due DESC, undated last in each group', () => {
+    const logs = [
+      mk(1, '2026-03-01', true),
+      mk(2, '2026-05-01', false),
+      mk(3, null, true),
+      mk(4, '2026-04-01', true),
+      mk(5, null, false),
+      mk(6, '2026-02-01', false),
+    ];
+    expect([...logs].sort(compareLogs).map(l => l.id)).toEqual([6, 2, 5, 4, 1, 3]);
   });
 });

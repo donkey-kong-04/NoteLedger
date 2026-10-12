@@ -6,9 +6,10 @@
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
   import LinkEditor from '$lib/components/LinkEditor.svelte';
-  import { settings, picklists, projects, logs, projectLinks, loadAll, pendingProjectFocus, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
+  import { settings, picklists, projects, logs, projectLinks, loadAll, pendingProjectFocus, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchQuery, searchTokens } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { logMatchesSlot, computeVisibility } from '$lib/filters';
+  import { logMatchesSearch } from '$lib/search';
   import { densityStyle as densityStyleFor } from '$lib/density';
 
 
@@ -77,14 +78,15 @@
   // True when no filter that narrows the visible logs is active — used to decide
   // whether projects with no matching logs should still be shown.
   $: noLogFilter = !$selCat1.length && !$selCat2.length && !$selCat3.length && !$selCat4.length
-    && $selLogType === null;
+    && $selLogType === null && $searchTokens.length === 0;
 
   $: matchingLogs = $logs.filter(l =>
     ($selLogType === null || l.type_id === $selLogType) &&
     logMatchesSlot(l, 1, $selCat1, visProjects) &&
     logMatchesSlot(l, 2, $selCat2, visProjects) &&
     logMatchesSlot(l, 3, $selCat3, visProjects) &&
-    logMatchesSlot(l, 4, $selCat4, visProjects)
+    logMatchesSlot(l, 4, $selCat4, visProjects) &&
+    logMatchesSearch(l, $searchTokens)
   );
 
   // ── Project visibility ───────────────────────────────────────────────────
@@ -139,11 +141,13 @@
     openNew(e.detail.typeId, e.detail.project.id);
   }
 
-  // After creating a project or log, reveal it: clear category filters and
-  // focus the project filter on it, so it doesn't vanish behind active filters.
+  // After creating a project or log, reveal it: clear category filters and the
+  // log search, and focus the project filter on it, so it doesn't vanish
+  // behind active filters.
   function focusOnProject(projectId: number) {
     $selCat1 = []; $selCat2 = []; $selCat3 = []; $selCat4 = [];
     $selLogType = null;
+    $searchQuery = '';
     $selProject = projectId;
   }
 

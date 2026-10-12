@@ -1,11 +1,12 @@
 <script lang="ts">
   import Badge from './Badge.svelte';
   import { createEventDispatcher } from 'svelte';
-  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, hasRichText } from '../types';
-  import { expandClosedPoints } from '../store';
+  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, hasRichText, compareLogs } from '../types';
+  import { expandClosedPoints, selProject, searchTokens, searchActive } from '../store';
   import type { Log, Project, PicklistValue, ProjectLink } from '../types';
   import { openLink } from '../types';
   import { sanitizeHtml } from '../sanitize';
+  import { highlightSegments, highlightHtml } from '../search';
 
   export let project: Project;
   export let subProjects: Project[];
@@ -21,6 +22,9 @@
   export let allLinks: ProjectLink[] = [];
   // Templates page: shows a Clone button on top-level template cards.
   export let showCloneButton: boolean = false;
+  // Funnel icon next to the title that sets the project filter, and log
+  // search highlighting. Off on the Templates page, which has no filters.
+  export let filterable: boolean = true;
   export let logTypes: PicklistValue[];
   export let cat1Vals: PicklistValue[];
   export let cat2Vals: PicklistValue[];
@@ -32,7 +36,6 @@
   // global fold state so they come back folded after a "Fold all".
   let collapsed = collapseAll;
   let showTypePicker = false;
-  let activeTab: 'logs' | 'links' = 'logs';
 
   // Apply a global fold/unfold only when the signal changes — leaves the local
   // chevron toggle untouched in between.
@@ -53,14 +56,7 @@
 
   $: ownLogs = allLogs
     .filter(l => Number(l.project_id) === Number(project.id))
-    .sort((a, b) => {
-      // open with date ASC, then open without date, then closed with date ASC
-      if (a.is_closed !== b.is_closed) return a.is_closed ? 1 : -1;
-      if (!a.due_date && !b.due_date) return 0;
-      if (!a.due_date) return 1;
-      if (!b.due_date) return -1;
-      return a.due_date.localeCompare(b.due_date);
-    });
+    .sort(compareLogs);
 
   $: ownLogsTotal = allLogsTotal.filter(l => Number(l.project_id) === Number(project.id));
   $: openCount = ownLogsTotal.filter(l => !l.is_closed).length;
@@ -90,12 +86,14 @@
 
   $: ownLinks = allLinks.filter(l => l.project_id === project.id);
 
+  $: tokens = filterable ? $searchTokens : [];
+
   // "See more/less" clicks are per-log exceptions to the global toggle;
-  // flipping the toggle clears them so it always hides/shows everything.
+  // flipping the toggle (or starting/ending a search, which expands
+  // everything) clears them so it always hides/shows everything.
   let closedPointsOverride = new Set<number>();
-  let lastExpandAll = $expandClosedPoints;
-  $: if ($expandClosedPoints !== lastExpandAll) {
-    lastExpandAll = $expandClosedPoints;
+  $: resetClosedPointsOverride($expandClosedPoints, $searchActive);
+  function resetClosedPointsOverride(..._deps: unknown[]) {
     closedPointsOverride = new Set();
   }
   function toggleClosedPoints(id: number) {
@@ -121,6 +119,19 @@
         on:click={() => dispatch('editProject', project)}
         on:keydown={e => e.key === 'Enter' && dispatch('editProject', project)}
       >{project.title}</span>
+      {#if filterable}
+        {@const filtered = $selProject === project.id}
+        <button
+          class="filter-btn" class:active={filtered}
+          on:click={() => selProject.set(filtered ? null : project.id)}
+          title={filtered ? 'Clear project filter' : 'Filter on this project'}
+          aria-label={filtered ? 'Clear project filter' : 'Filter on this project'}
+        >
+          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1.5 2.5h13l-5 6v4.5l-3 1.5V8.5l-5-6z"/>
+          </svg>
+        </button>
+      {/if}
       {#each projectCatBadges as badge}
         <Badge label={badge.val.label} catType={badge.catType} selected={true} clickable={false} size="sm" />
       {/each}
@@ -148,19 +159,26 @@
   </div>
 
   {#if !collapsed}
-    <!-- Body: Logs / Links tabs (sub-projects are outside, always visible) -->
+    <!-- Body: links first, then the logs table (sub-projects are outside, always visible) -->
     {#if (ownLogs.length > 0 || ownLinks.length > 0) && !ancestorOnlyProjectIds.has(project.id)}
       <div class="card-body">
-        <div class="body-tabs">
-          <button class="body-tab" class:active={activeTab === 'logs'} on:click={() => activeTab = 'logs'}>
-            Logs {#if ownLogs.length > 0}<span class="tab-count">{ownLogs.length}</span>{/if}
-          </button>
-          <button class="body-tab" class:active={activeTab === 'links'} on:click={() => activeTab = 'links'}>
-            Links {#if ownLinks.length > 0}<span class="tab-count">{ownLinks.length}</span>{/if}
-          </button>
-        </div>
+        {#if ownLinks.length > 0}
+          <div class="links-panel">
+            {#each ownLinks as link (link.id)}
+              <div class="link-row">
+                <button class="link-card" on:click|stopPropagation={() => openLink(link.url).catch(e => console.error('openLink failed:', e, link.url))}>
+                  <svg class="link-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6.5 9.5a3.5 3.5 0 0 0 5 0l2-2a3.536 3.536 0 0 0-5-5L7.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                    <path d="M9.5 6.5a3.5 3.5 0 0 0-5 0l-2 2a3.536 3.536 0 0 0 5 5l1-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  </svg>
+                  <span class="link-card-label">{link.label}</span>
+                </button>
+                <button class="link-action" on:click|stopPropagation={() => dispatch('editLink', link)} title="Edit">✎</button>
+              </div>
+            {/each}
+          </div>
+        {/if}
 
-        {#if activeTab === 'logs'}
         {#if ownLogs.length > 0}
           <div class="log-table-wrap">
             <table class="log-table">
@@ -186,7 +204,7 @@
                     on:keydown={e => e.key === 'Enter' && dispatch('edit', log)}
                   >
                     <td class="col-title">
-                      <span class="log-title">{log.title}</span>
+                      <span class="log-title">{#each highlightSegments(log.title, tokens) as seg}{#if seg.hit}<mark class="search-hit">{seg.text}</mark>{:else}{seg.text}{/if}{/each}</span>
                       {#if typeMeta}
                         <span class="log-type">{typeMeta}</span>
                       {/if}
@@ -205,7 +223,7 @@
                     </td>
                     <td class="col-desc">
                       {#if log.description}
-                        <div class="log-desc" on:click={handleLinkClick}>{@html sanitizeHtml(log.description)}</div>
+                        <div class="log-desc" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.description), tokens)}</div>
                       {/if}
                       {#if hasRichText(log.closed_description)}
                         {@const cpOpen = closedPointsOverride.has(log.id) ? !$expandClosedPoints : $expandClosedPoints}
@@ -214,7 +232,7 @@
                           {cpOpen ? 'See less' : 'See more…'}
                         </button>
                         {#if cpOpen}
-                          <div class="log-desc closed-points" on:click={handleLinkClick}>{@html sanitizeHtml(log.closed_description)}</div>
+                          <div class="log-desc closed-points" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.closed_description), tokens)}</div>
                         {/if}
                       {/if}
                     </td>
@@ -223,28 +241,6 @@
               </tbody>
             </table>
           </div>
-        {:else}
-          <p class="tab-empty">No logs.</p>
-        {/if}
-        {:else}
-        {#if ownLinks.length > 0}
-          <div class="links-panel">
-            {#each ownLinks as link (link.id)}
-              <div class="link-row">
-                <button class="link-card" on:click|stopPropagation={() => openLink(link.url).catch(e => console.error('openLink failed:', e, link.url))}>
-                  <svg class="link-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6.5 9.5a3.5 3.5 0 0 0 5 0l2-2a3.536 3.536 0 0 0-5-5L7.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                    <path d="M9.5 6.5a3.5 3.5 0 0 0-5 0l-2 2a3.536 3.536 0 0 0 5 5l1-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                  </svg>
-                  <span class="link-card-label">{link.label}</span>
-                </button>
-                <button class="link-action" on:click|stopPropagation={() => dispatch('editLink', link)} title="Edit">✎</button>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <p class="tab-empty">No links — use ＋ Link to add one.</p>
-        {/if}
         {/if}
       </div>
     {/if}
@@ -269,6 +265,7 @@
         {visibleProjectIds} {ancestorOnlyProjectIds} {showClosed}
         {collapseSignal} {collapseAll}
         depth={depth + 1}
+        {filterable}
         {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
         on:edit
         on:editProject
@@ -354,6 +351,17 @@
     white-space: nowrap;
   }
   .project-title:hover { color: var(--accent); }
+
+  .filter-btn {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; transition: background 0.1s, color 0.1s;
+  }
+  .filter-btn:hover { background: var(--surface-hover); color: var(--text); }
+  .filter-btn.active { color: var(--accent); }
 
   .closed-pill {
     font-size: 10px; font-weight: 600; text-transform: uppercase;
@@ -518,57 +526,15 @@
   }
   .card-body .log-table-wrap { min-width: 0; }
 
-  /* Logs / Links tabs — folder-tab style: the active tab shares the card
-     body's background and merges with the panel below (its bottom border goes
-     transparent), like a physical folder tab; inactive tabs stay recessed. */
-  .body-tabs {
-    display: flex;
-    /* Same color as the project header bar so the card top reads as one piece
-       (in dark mode --project-header and --surface-3 are already identical). */
-    background: var(--project-header, var(--surface-3));
-    padding: 0;
-    gap: 0;
-  }
-  /* No separator borders: tabs are distinguished by background alone (active
-     = card surface, inactive = header-colored strip), same as dark mode where
-     the old borders were invisible anyway (--border == --project-header). */
-  .body-tab {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    background: none; cursor: pointer; font-family: inherit;
-    font-size: 12px; font-weight: 600;
-    color: var(--text-muted);
-    padding: 7px 16px;
-    border: none;
-    border-radius: 7px 7px 0 0;
-    transition: background 0.15s, color 0.15s;
-  }
-  .body-tab:hover { color: var(--text); background: var(--surface-hover); }
-  .body-tab.active {
-    background: var(--surface);
-    color: var(--text);
-    box-shadow: inset 0 2px 0 var(--accent);
-  }
-  .body-tab.active:hover { color: var(--text); background: var(--surface); }
-  .tab-count {
-    font-size: 10px; font-weight: 700;
-    background: var(--surface); color: var(--text-muted);
-    border-radius: 999px; padding: 0 6px; line-height: 14px;
-  }
-  .body-tab.active .tab-count { background: var(--surface-3); color: var(--text); }
-
-  .tab-empty {
-    margin: 0; padding: 10px 14px;
-    font-size: 12px; color: var(--text-muted);
-  }
-
-  /* Links panel — full-width row of link cards, wrapping */
+  /* Links panel — full-width row of link cards, wrapping, above the logs table */
   .links-panel {
-    padding: 6px 8px;
+    padding: 8px 10px;
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
     min-width: 0;
   }
+  .links-panel + .log-table-wrap { padding-top: 0; }
 
   .link-row {
     display: flex; align-items: center; gap: 4px;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { logs, projects, picklists, settings, loadAll, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType } from '$lib/store';
-  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, hasRichText } from '$lib/types';
+  import { logs, projects, picklists, settings, loadAll, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchTokens, searchActive } from '$lib/store';
+  import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, hasRichText, compareLogs } from '$lib/types';
   import type { Log, Project, PicklistValue } from '$lib/types';
   import Badge from '$lib/components/Badge.svelte';
   import FilterPanel from '$lib/components/FilterPanel.svelte';
@@ -10,17 +10,18 @@
   import { logMatchesSlot, getDescendantIds } from '$lib/filters';
   import { densityStyle } from '$lib/density';
   import { sanitizeHtml } from '$lib/sanitize';
+  import { highlightSegments, highlightHtml, logMatchesSearch } from '$lib/search';
 
   onMount(() => loadAll());
 
   $: pageDensityStyle = densityStyle($settings.density);
 
   // "See more/less" clicks are per-log exceptions to the global toggle;
-  // flipping the toggle clears them so it always hides/shows everything.
+  // flipping the toggle (or starting/ending a search, which expands
+  // everything) clears them so it always hides/shows everything.
   let closedPointsOverride = new Set<number>();
-  let lastExpandAll = $expandClosedPoints;
-  $: if ($expandClosedPoints !== lastExpandAll) {
-    lastExpandAll = $expandClosedPoints;
+  $: resetClosedPointsOverride($expandClosedPoints, $searchActive);
+  function resetClosedPointsOverride(..._deps: unknown[]) {
     closedPointsOverride = new Set();
   }
   function toggleClosedPoints(id: number) {
@@ -131,17 +132,11 @@
     logMatchesSlot(l, 1, $selCat1, nonTemplateProjects) &&
     logMatchesSlot(l, 2, $selCat2, nonTemplateProjects) &&
     logMatchesSlot(l, 3, $selCat3, nonTemplateProjects) &&
-    logMatchesSlot(l, 4, $selCat4, nonTemplateProjects)
+    logMatchesSlot(l, 4, $selCat4, nonTemplateProjects) &&
+    logMatchesSearch(l, $searchTokens)
   );
 
-  // Open logs sorted by due date ASC (no date last), closed logs at the end.
-  $: sortedLogs = [...matchingLogs].sort((a, b) => {
-    if (a.is_closed !== b.is_closed) return a.is_closed ? 1 : -1;
-    if (!a.due_date && !b.due_date) return 0;
-    if (!a.due_date) return 1;
-    if (!b.due_date) return -1;
-    return a.due_date.localeCompare(b.due_date);
-  });
+  $: sortedLogs = [...matchingLogs].sort(compareLogs);
 </script>
 
 <div class="page" style={pageDensityStyle}>
@@ -190,7 +185,7 @@
                 {/if}
               </td>
               <td class="col-title">
-                <span class="log-title">{log.title}</span>
+                <span class="log-title">{#each highlightSegments(log.title, $searchTokens) as seg}{#if seg.hit}<mark class="search-hit">{seg.text}</mark>{:else}{seg.text}{/if}{/each}</span>
                 {#if typeMeta}
                   <span class="log-type">{typeMeta}</span>
                 {/if}
@@ -211,7 +206,7 @@
               </td>
               <td class="col-desc">
                 {#if log.description}
-                  <div class="log-desc" on:click={handleLinkClick}>{@html sanitizeHtml(log.description)}</div>
+                  <div class="log-desc" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.description), $searchTokens)}</div>
                 {/if}
                 {#if hasRichText(log.closed_description)}
                   {@const cpOpen = closedPointsOverride.has(log.id) ? !$expandClosedPoints : $expandClosedPoints}
@@ -220,7 +215,7 @@
                     {cpOpen ? 'See less' : 'See more…'}
                   </button>
                   {#if cpOpen}
-                    <div class="log-desc closed-points" on:click={handleLinkClick}>{@html sanitizeHtml(log.closed_description)}</div>
+                    <div class="log-desc closed-points" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.closed_description), $searchTokens)}</div>
                   {/if}
                 {/if}
               </td>

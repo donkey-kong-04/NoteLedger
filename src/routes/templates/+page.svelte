@@ -135,6 +135,7 @@
           collapseAll={allCollapsed}
           depth={0}
           showCloneButton={true}
+          filterable={false}
           {logTypes} {cat1Vals} {cat2Vals} {cat3Vals} {cat4Vals}
           on:edit={openEdit}
           on:editProject={openEditProject}

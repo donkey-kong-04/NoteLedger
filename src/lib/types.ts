@@ -144,6 +144,18 @@ export function openSinceLabel(log: Log): string {
   return `Open since ${d} days`;
 }
 
+// Log display order: open logs by due date ASC (no date last), then closed
+// logs by due date DESC — most recent deadline first (no date last).
+export function compareLogs(a: Log, b: Log): number {
+  if (a.is_closed !== b.is_closed) return a.is_closed ? 1 : -1;
+  if (!a.due_date && !b.due_date) return 0;
+  if (!a.due_date) return 1;
+  if (!b.due_date) return -1;
+  return a.is_closed
+    ? b.due_date.localeCompare(a.due_date)
+    : a.due_date.localeCompare(b.due_date);
+}
+
 export function deadlineColor(due: string): string {
   const today = new Date();
   today.setHours(0, 0, 0, 0);

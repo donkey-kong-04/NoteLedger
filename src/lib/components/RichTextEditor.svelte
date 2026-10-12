@@ -63,6 +63,37 @@
     exec('foreColor', color);
   }
 
+  // execCommand has no "remove color". Default applies a throwaway marker
+  // color (so the browser splits any colored ancestors around the selection),
+  // then strips it, leaving the text to inherit the theme's text color.
+  const DEFAULT_COLOR_MARKER = 'rgb(1, 2, 3)';
+
+  function stripColorMarker() {
+    editor.querySelectorAll<HTMLElement>('[style], font[color]').forEach(el => {
+      if (el.style.color === DEFAULT_COLOR_MARKER) {
+        el.style.removeProperty('color');
+        if (!el.getAttribute('style')) el.removeAttribute('style');
+      }
+      const attr = el.getAttribute('color')?.toLowerCase();
+      if (attr === '#010203' || attr === DEFAULT_COLOR_MARKER) el.removeAttribute('color');
+    });
+  }
+
+  function resetColor() {
+    editor.focus();
+    document.execCommand('foreColor', false, DEFAULT_COLOR_MARKER);
+    stripColorMarker();
+    syncValue();
+    updateActive();
+  }
+
+  // With a collapsed caret, Default only sets the typing style, so the marker
+  // shows up on the next typed text — strip it on every input.
+  function onInput() {
+    stripColorMarker();
+    syncValue();
+  }
+
   function clearFormat() {
     exec('removeFormat');
   }
@@ -208,7 +239,10 @@
       const sel = window.getSelection();
       const node = sel?.anchorNode;
       const cell = closestEl(node)?.closest('td, th');
-      if (cell) {
+      // A list inside the cell wins: Tab/Shift+Tab indents/outdents it
+      // instead of moving between cells.
+      const li = closestEl(node)?.closest('li');
+      if (cell && !(li && cell.contains(li))) {
         handleTableTab(cell, e.shiftKey);
         return;
       }
@@ -346,6 +380,12 @@
 
     <div class="tb-divider"></div>
 
+    <button
+      class="color-swatch swatch-default"
+      on:mousedown|preventDefault={resetColor}
+      title="Default color"
+      aria-label="Default color"
+    ></button>
     {#each COLORS as color}
       <button
         class="color-swatch"
@@ -372,7 +412,7 @@
     aria-multiline="true"
     aria-label="Description"
     on:focus={() => showTablePicker = false}
-    on:input={syncValue}
+    on:input={onInput}
     on:keyup={updateActive}
     on:mouseup={updateActive}
     on:keydown={onKeydown}
@@ -505,6 +545,14 @@
     transform: scale(1.25);
     border-color: var(--border);
   }
+  /* Empty circle with a diagonal slash — the usual "no color" mark. */
+  .swatch-default {
+    border-color: var(--text-muted);
+    background: linear-gradient(135deg,
+      transparent calc(50% - 0.75px), var(--text-muted) calc(50% - 0.75px),
+      var(--text-muted) calc(50% + 0.75px), transparent calc(50% + 0.75px));
+  }
+  .swatch-default:hover { border-color: var(--text); }
 
   .editor {
     min-height: 110px;

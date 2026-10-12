@@ -1,4 +1,5 @@
-import { writable } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
+import { parseSearchTokens } from './search';
 import { invoke } from '@tauri-apps/api/core';
 import type { UserSettings, PicklistValue, Log, Project, ProjectLink } from './types';
 
@@ -31,6 +32,25 @@ export const selCat3 = writable<number[]>([]);
 export const selCat4 = writable<number[]>([]);
 export const selProject = writable<number | null>(null);
 export const selLogType = writable<number | null>(null);
+
+// Always-visible log search (title / open points / closed points).
+export const searchQuery = writable('');
+export const searchTokens = derived(searchQuery, parseSearchTokens);
+export const searchActive = derived(searchTokens, t => t.length > 0);
+
+// Searching expands every log's Closed Points (a match may sit there, and
+// it's easier to scan); the previous setting comes back once the search is
+// cleared.
+let expandBeforeSearch: boolean | null = null;
+searchActive.subscribe(active => {
+  if (active && expandBeforeSearch === null) {
+    expandBeforeSearch = get(expandClosedPoints);
+    expandClosedPoints.set(true);
+  } else if (!active && expandBeforeSearch !== null) {
+    expandClosedPoints.set(expandBeforeSearch);
+    expandBeforeSearch = null;
+  }
+});
 
 // Whether the filter drawer is open; lives here so the app shell in
 // +layout.svelte can shift the page content aside instead of being overlaid.

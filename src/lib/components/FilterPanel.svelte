@@ -2,7 +2,7 @@
   import { get } from 'svelte/store';
   import { onDestroy, tick } from 'svelte';
   import CategoryFilter from './CategoryFilter.svelte';
-  import { picklists, projects, settings, saveSettings, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen } from '../store';
+  import { picklists, projects, settings, saveSettings, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen, searchQuery } from '../store';
   import { sortedProjectOptions, CAT_COLORS } from '../types';
   import type { PicklistValue } from '../types';
 
@@ -79,6 +79,7 @@
     $selProject = null;
     $selLogType = null;
     $showClosed = false;
+    $searchQuery = '';
   }
 
   // ── Active filter chips (always visible in the bar, each dismissible) ────
@@ -166,6 +167,24 @@
       <line x1="10.5" y1="10.5" x2="14" y2="14"/>
     </svg>
   </button>
+
+  <div class="log-search" class:active={$searchQuery.trim() !== ''}>
+    <svg class="log-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <circle cx="7" cy="7" r="4.5"/>
+      <line x1="10.5" y1="10.5" x2="14" y2="14"/>
+    </svg>
+    <input
+      type="text"
+      placeholder="Search logs…"
+      title="Search log titles, open points and closed points — every word must appear somewhere in the log"
+      aria-label="Search logs"
+      bind:value={$searchQuery}
+      on:keydown={e => { if (e.key === 'Escape') { $searchQuery = ''; e.currentTarget.blur(); } }}
+    />
+    {#if $searchQuery}
+      <button class="log-search-clear" on:click={() => $searchQuery = ''} title="Clear search" aria-label="Clear search">×</button>
+    {/if}
+  </div>
 
   {#if activeCount > 0}
     <button class="btn-clear" on:click={clearAll} title="Clear all filters">✕ Clear all</button>
@@ -333,6 +352,36 @@
   }
   .drawer-header h2 { margin: 0; font-size: 17px; font-weight: 700; color: var(--text); }
   .drawer-actions { display: flex; align-items: center; gap: 8px; }
+
+  /* Always-visible log search, styled like the funnel buttons. */
+  .log-search {
+    position: relative;
+    display: flex; align-items: center;
+    width: 240px; height: 32px; flex-shrink: 0;
+  }
+  .log-search-icon {
+    position: absolute; left: 10px;
+    color: var(--text-muted); pointer-events: none;
+  }
+  .log-search input {
+    width: 100%; height: 100%;
+    box-sizing: border-box;
+    padding: 0 26px 0 30px;
+    background: var(--surface-2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; font-family: inherit;
+    outline: none; transition: border-color 0.15s;
+  }
+  .log-search input:focus,
+  .log-search.active input { border-color: var(--accent); }
+  .log-search.active .log-search-icon { color: var(--accent); }
+  .log-search-clear {
+    position: absolute; right: 6px;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 15px; line-height: 1;
+    padding: 0 3px;
+  }
+  .log-search-clear:hover { color: var(--text); }
 
   .btn-clear {
     background: none; color: #ef4444;
