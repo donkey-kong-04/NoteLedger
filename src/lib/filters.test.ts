@@ -95,7 +95,7 @@ describe('category inheritance', () => {
 });
 
 describe('computeVisibility', () => {
-  it('hides closed projects unless showClosed is set', () => {
+  it('hides closed projects unless includeClosed is set', () => {
     const projects = [project(1, null), project(2, null, { is_closed: true })];
     const open = computeVisibility(projects, [], null, false, true);
     expect(open.visible.has(2)).toBe(false);

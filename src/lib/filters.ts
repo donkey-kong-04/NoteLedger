@@ -63,7 +63,7 @@ export function computeVisibility(
   projects: Project[],
   logs: Log[],
   selProject: number | null,
-  showClosed: boolean,
+  includeClosed: boolean,
   noCatFilter: boolean
 ): Visibility {
   const visible = new Set<number>();
@@ -89,13 +89,13 @@ export function computeVisibility(
         visible.add(did);
         continue;
       }
-      // Category filter active: respect show-closed, only show if subtree has matching logs
-      if (p.is_closed && !showClosed) continue;
+      // Category filter active: respect includeClosed, only show if subtree has matching logs
+      if (p.is_closed && !includeClosed) continue;
       if (subtreeHasLogs(projects, logs, did)) visible.add(did);
     }
   } else {
     for (const p of projects) {
-      if (p.is_closed && !showClosed) continue;
+      if (p.is_closed && !includeClosed) continue;
       if (noCatFilter || subtreeHasLogs(projects, logs, p.id)) visible.add(p.id);
     }
   }

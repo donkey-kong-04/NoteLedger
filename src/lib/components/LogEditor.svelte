@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
   import Badge from './Badge.svelte';
   import RichTextEditor from './RichTextEditor.svelte';
   import type { Log, PicklistValue, Project } from '../types';
@@ -126,6 +126,15 @@ if (isNew) {
   let addDraft: Record<number, string> = { 1: '', 2: '', 3: '', 4: '' };
   let pendingAdd: Promise<void> = Promise.resolve();
   let isClicking: Record<number, boolean> = { 1: false, 2: false, 3: false, 4: false };
+  let addInputEls: Record<number, HTMLInputElement> = {};
+
+  // Open (or keep) a slot's search input focused, so after a selection the
+  // next value can be typed right away.
+  async function focusAddInput(slot: 1|2|3|4) {
+    showAddInput[slot] = true;
+    await tick();
+    addInputEls[slot]?.focus({ preventScroll: true });
+  }
 
   function filteredVals(vals: typeof cats[0]['vals'], q: string) {
     const query = q.trim().toLowerCase();
@@ -137,10 +146,9 @@ if (isNew) {
     if (!trimmed) { addDraft[slot] = ''; showAddInput[slot] = false; return; }
     // Exact match → toggle existing value
     const exact = vals.find(v => v.label.toLowerCase() === trimmed.toLowerCase());
-    if (exact) { toggleCat(slot, exact.id); addDraft[slot] = ''; showAddInput[slot] = false; return; }
-    // No match → create new and select
+    if (exact) { toggleCat(slot, exact.id); return; }
+    // No match → create new and select (the input stays open for the next one)
     addDraft[slot] = '';
-    showAddInput[slot] = false;
     // Swallow failures: a failed picklist create must not leave a rejected
     // pendingAdd behind, which would make every subsequent save() throw.
     const p = createPicklistValue(`category_${slot}`, trimmed).then(newVal => {
@@ -217,20 +225,21 @@ if (isNew) {
                 class="inline-add-input"
                 style="border-color:{color}; outline-color:{color}"
                 bind:value={addDraft[cat.slot]}
+                bind:this={addInputEls[cat.slot]}
                 placeholder="Search or add…"
+                on:input={e => e.currentTarget.scrollIntoView({ block: 'nearest' })}
                 on:blur={() => { if (!isClicking[cat.slot]) { addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; } }}
                 on:keydown={e => { if (e.key === 'Enter') { e.preventDefault(); addAndSelect(cat.slot, cat.vals); } if (e.key === 'Escape' || e.key === 'Tab') { isClicking[cat.slot] = false; addDraft[cat.slot] = ''; showAddInput[cat.slot] = false; } }}
-                autofocus
               />
             {:else}
-              <button class="inline-add-btn" style="--cat-color:{color}" on:click={() => showAddInput[cat.slot] = true}>Add or search</button>
+              <button class="inline-add-btn" style="--cat-color:{color}" on:click={() => focusAddInput(cat.slot)}>Add or search</button>
             {/if}
             {#each filteredVals(cat.vals, addDraft[cat.slot]) as v (v.id)}
               <Badge
                 label={v.label}
                 catType="category_{cat.slot}"
                 selected={sel.includes(v.id)}
-                on:click={() => toggleCat(cat.slot, v.id)}
+                on:click={() => { toggleCat(cat.slot, v.id); focusAddInput(cat.slot); }}
                 size="sm"
               />
             {/each}
@@ -413,13 +422,19 @@ if (isNew) {
     opacity: 0.85;
   }
 
+  /* At most 3 badge rows (~20px each + gaps), then scroll: long lists are
+     meant to be narrowed with the search. The few spare px let a 4th row peek
+     in as a hint that the list scrolls. */
   .cat-badges {
     display: flex; flex-wrap: wrap; gap: 4px;
+    align-content: flex-start;
     padding: 6px 8px;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 8px;
     min-height: 32px;
+    max-height: 92px;
+    overflow-y: auto;
   }
 
   .no-vals {

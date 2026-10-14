@@ -130,7 +130,6 @@
           allLinks={$projectLinks}
           visibleProjectIds={allTemplateIds}
           ancestorOnlyProjectIds={new Set()}
-          showClosed={true}
           {collapseSignal}
           collapseAll={allCollapsed}
           depth={0}

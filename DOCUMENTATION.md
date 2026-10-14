@@ -88,7 +88,7 @@ A project groups logs together and can be nested under a parent project.
 #### Notes
 - Application logic prevents circular parent references.
 - Deleting a project is blocked if it has sub-projects or logs.
-- Closed projects are hidden by default; shown when "Show closed" toggle is on.
+- Closed projects are hidden in the unfiltered view and included whenever any filter is active (see [Closed Items](#closed-items)).
 - Projects can have category values assigned (see junction tables below).
 - `is_template` is fixed at creation time (not updatable). A sub-project always inherits its parent's flag at insert (enforced in `project_repo::insert`), so a template tree stays consistently marked. Template projects and their logs are excluded from the Project view and Table view pages.
 
@@ -182,24 +182,24 @@ All filters live in a single component, `FilterPanel.svelte`, used by both the P
    - The query is split on whitespace into **tokens**; each token matches **case-insensitively as a substring** — `abc ghi` matches "abc def ghi" and also "abcdefghi". Duplicate tokens are ignored; regex characters are literal.
    - **AND logic at the log level**: a log is shown only if **every** token is found, but each token may sit in **any** of the three fields (one in the title, another in the open points, another in the closed points is a match). A single token never matches across two fields.
    - It combines with all other filters (AND). In the Project view, projects with no matching logs are hidden while a search is active (like a category filter).
-   - **Closed items are always searched**: while a search is active, closed logs (Table view) and closed projects (Project view) are included regardless of the "Show closed" toggle — only those with a matching log appear, still greyed out as closed. The toggle itself is left untouched.
+   - **Closed items are always searched**: like every filter, a search includes closed logs (Table view) and closed projects (Project view) — only those with a matching log appear, still greyed out as closed (see [Closed Items](#closed-items)).
    - **Highlighting**: every occurrence of every token is wrapped in a yellow `<mark class="search-hit">` (global style in `+layout.svelte`, same yellow + dark text in both themes) — in log titles and inside the open/closed points rich text, in both views. Overlapping tokens merge into one highlight; a match spanning formatting (e.g. a half-bold word) is still highlighted. Highlighting is done after sanitizing, with DOM APIs (no markup injected). Not applied on the Templates page.
-   - **Closed points auto-expand**: while a search is active, every log's Closed Points are shown (the global **Closed points** toggle switches on, per-log See more/less exceptions are reset), whether or not a token matched there. Clearing the search restores the previous toggle state; the toggle and See less still work during a search.
+   - **Closed points auto-expand**: while a search is active, every log's Closed Points are shown, whether or not a token matched there; per-log See more/less choices are reset when the search starts and ends. Clearing the search collapses them again; See less still works during a search.
    - **×** button inside the input (or **Escape**) clears the search. The search is shared between the Project and Table views, cleared by **Clear all**, and cleared when a newly created project/log is focused.
-4. **✕ Clear all button** (red outline), right of the icons, visible **only while at least one filter is active**. Clears every filter at once: project, log type, all category selections, "Show closed" and the log search. (This used to live in the drawer header; it is now always reachable without opening the drawer.)
-5. **Active-filter chips**, shown next to the buttons at all times (even with the drawer closed) so active filters are never hidden state. One chip per active filter — selected project, log type, each selected category value (tinted with its category color), and "Closed shown". Each chip has an **×** that clears just that filter.
+4. **✕ Clear all button** (red outline), right of the icons, visible **only while at least one filter is active**. Clears every filter at once: project, log type, all category selections and the log search. (This used to live in the drawer header; it is now always reachable without opening the drawer.)
+5. **Active-filter chips**, shown next to the buttons at all times (even with the drawer closed) so active filters are never hidden state. One chip per active filter — selected project, log type, and each selected category value (tinted with its category color). Each chip has an **×** that clears just that filter.
 6. **The drawer** itself: a non-modal panel (440px) that slides in from the left edge and **pushes the page content to the right** instead of overlaying it (the app shell gets matching left padding, animated in sync), so the main view stays fully visible and updates live as filters are toggled. Closed via the funnel icon, the ✕ button, **Escape**, or clicking anywhere outside the drawer. Open state lives in the `filterDrawerOpen` store so the layout can react; it resets when navigating to a page without filters. Header row: "Filters" title and the close button. Body sections:
-   - **Project filters** — project lookup (search input) and the "Show closed" toggle, side by side. The project filter can also be set straight from a project card via the funnel icon next to its title (see project card header row).
+   - **Project filters** — project lookup (search input). The project filter can also be set straight from a project card via the funnel icon next to its title (see project card header row).
    - **Log filters** — the log type single-select.
-   - **Category filters** — the four category filter groups in a **2×2 grid** (1/2 on the first row, 3/4 on the second). Each group's value list is capped at a **fixed height (180px, ~6 badge rows) and scrolls internally**, so long lists never stretch the drawer. Category labels remain editable in place here, and the "Add or search" badge management works exactly as before.
+   - **Category filters** — the four category filter groups in a **2×2 grid** (1/2 on the first row, 3/4 on the second). Each group's value list is capped at **3 badge rows and scrolls internally** (use the search to narrow long lists), so long lists never stretch the drawer. Category labels remain editable in place here, and the "Add or search" badge management works exactly as before.
 
 The filter *behaviors* below are unchanged from the previous top-bar/sidebar design — only their location moved into the drawer.
 
-### Show Closed Toggle
+### Closed Items
 
-A toggle switch in the drawer's **Project filters** section labelled **"Show closed"**:
-- **Off (default)**: closed **projects** are hidden. Closed **logs** are always shown inside visible projects (greyed out at 60% opacity).
-- **On**: closed projects are also visible (rendered at 55% opacity). Closed logs remain visible in all cases.
+There is no "Show closed" toggle (removed in 0.4.14) — closed items appear through filtering:
+- **No filter active**: closed **projects** are hidden (Project view) and closed **logs** are hidden (Table view). In the Project view, closed logs are always shown inside visible projects (greyed out at 60% opacity).
+- **Any filter active** — project, log type, a category value or the log search (`filtersActive` store in `store.ts`): closed projects (rendered at 55% opacity) and closed logs are included. With a log-narrowing filter (log type, category, search), a closed project only appears if its subtree has a matching log. To see one closed project, pick it in the project lookup.
 
 ### Project Lookup
 
@@ -214,7 +214,7 @@ Filter logic once a project is selected:
 - Shows the selected project and all its descendants.
 - Ancestor projects (parent chain up to root) are shown as context-only — their header is visible but their log table is hidden.
 - When no category filter is active, **all descendants are shown** including closed ones, regardless of whether they have logs.
-- When category filters are active, descendants are only shown if their subtree contains matching logs (closed ones still respect the "Show closed" toggle).
+- When category filters are active, descendants are only shown if their subtree contains matching logs (closed ones included).
 
 ### Log Type Filter
 
@@ -224,7 +224,7 @@ A **basic single-select dropdown** in the drawer's **Log filters** section, defa
 
 Two ways to clear:
 - **Per filter**: every active filter has a chip in the page header with an × — one click removes just that filter, without opening the drawer.
-- **All at once**: the **✕ Clear all** button in the drawer header resets everything (categories, project, log type, show-closed). It appears only while at least one filter is active — with no filters there is nothing to clear, and the funnel badge/chips already make the "nothing is filtered" state obvious.
+- **All at once**: the **✕ Clear all** button in the drawer header resets everything (categories, project, log type, search). It appears only while at least one filter is active — with no filters there is nothing to clear, and the funnel badge/chips already make the "nothing is filtered" state obvious.
 
 ### Settings Page
 
@@ -243,7 +243,7 @@ All four categories sit in the drawer's **Category filters** section (2×2 grid)
 - **Label**: editable in place — clicking allows the user to rename the category.
 - **Values**: shown as clickable badges arranged **horizontally with wrapping**; clicking filters the main view. Values are sorted alphabetically. The list is capped at **180px high and scrolls internally** when a category has more values than fit.
 - **Edit/Delete buttons**: visible only when a badge is **selected** (not on hover) — ✎ edit (inline rename) and × delete (blocked if any log or project uses the value).
-- **Add or search**: an **"Add or search"** button appears **before** the badges. Clicking it opens an inline search input (border color matches the category color) that simultaneously filters visible badges (case-insensitive substring match as you type) and allows creating new values. Pressing Enter with an exact match toggles that value; with no match, creates a new value and auto-selects it. Clicking a badge while the search is open selects/deselects it and clears the search text. Escape or clicking away closes the input. The same control appears in the Log Editor and Project Editor category sections.
+- **Add or search**: an **"Add or search"** button appears **before** the badges. Clicking it opens an inline search input (border color matches the category color) that simultaneously filters visible badges (case-insensitive substring match as you type) and allows creating new values. Pressing Enter with an exact match toggles that value; with no match, creates a new value and auto-selects it. Clicking a badge selects/deselects it and clears the search text. After any selection (badge click or Enter) the search input of that same category stays open and focused, so the next value can be typed right away. Escape or clicking away closes the input. The same control appears in the Log Editor and Project Editor category sections, whose value boxes are likewise capped at 3 badge rows with internal scrolling.
 
 **Filter logic:**
 - Selecting multiple values within the **same category** → **AND** (the log+project combined must carry ALL selected values)
@@ -251,7 +251,7 @@ All four categories sit in the drawer's **Category filters** section (2×2 grid)
 - A log's **effective category set** = its own categories **∪** all ancestor project categories (recursive)
 - The **log type filter** (menu-bar picklist) further restricts to a single log type, AND-ed with the category filters
 - When any log-narrowing filter (category or log type) is active, projects whose entire subtree has no matching logs are **hidden automatically**
-- When "Show closed" is off, closed projects are hidden regardless of other filters
+- Closed projects are included whenever any filter is active (only those whose subtree has matching logs, as above) and hidden in the unfiltered view
 - When a project is selected in the dropdown with no category filter active, all descendant projects are shown (including closed ones)
 
 **Filters after creation:** creating a new project or log auto-adjusts the filters so the new item is immediately visible (instead of vanishing behind active filters): all category filters and the log type filter are cleared, and the project filter is set to the new project (or, for a log, the project it belongs to). This happens only on creation — editing an existing item leaves the filters untouched.
@@ -271,10 +271,10 @@ Badge style:
 
 Projects are displayed as a vertical tree list (not a grid). Each level of nesting is indented 24px to the right relative to its parent, giving a visual hierarchy without drawing tree lines.
 
-The **"Fold all / Unfold all"** button in the menu bar collapses every project card (including nested sub-projects) to its header in one click, then toggles to expand them all again. Individual cards can still be folded/unfolded via their chevron in between — the button re-broadcasts the global state on each press. While "Fold all" is active, expanding a project via its chevron reveals only that project's logs and its immediate sub-project headers — the sub-projects themselves stay folded (they inherit the global fold state when revealed) and must be expanded individually.
+**Folding hides logs only.** A folded project card hides its **logs table** — its header, its **links** and its **sub-projects** (themselves folded or not) stay visible, so folding gives an overview of the project tree and its links. The **"Fold all / Unfold all"** button in the menu bar folds every project card (including nested sub-projects) in one click, then toggles to unfold them all again. Each card's **chevron** (tooltip "Hide logs" / "Show logs") folds/unfolds just that card's logs in between — the button re-broadcasts the global state on each press. Cards that appear later (e.g. revealed by a filter change) start from the global fold state. (Before 0.4.14, folding collapsed a card to its header and hid its links and sub-projects too.)
 
 Each **project card** contains:
-- **Header row**: collapse chevron | project title (clickable → opens Project Editor) | **filter icon** (small funnel — sets the project filter to this project, same as picking it in the project lookup; clicking it again on the filtered project clears the filter; shown in accent color while active; hidden on the Templates page via `filterable={false}`) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button
+- **Header row**: fold chevron (hides/shows the card's logs) | project title (clickable → opens Project Editor) | **filter icon** (small funnel — sets the project filter to this project, same as picking it in the project lookup; clicking it again on the filtered project clears the filter; shown in accent color while active; hidden on the Templates page via `filterable={false}`) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button
 - **Body** (shown when the project has logs or links): no tabs — links and logs are shown together, **links always first**, then the logs table. Each section only appears when it has content (no empty-state placeholders). Sub-projects render below the card.
   - **Links**: project links displayed as Confluence-style cards (chain icon + label), flowing horizontally with wrapping across the full width, directly above the logs table. Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
   - **Logs table**: bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date **DESC** (most recent deadline first), then closed logs without due date. Same order as the Table view (shared `compareLogs()` in `types.ts`). Closed log rows are greyed out. Descriptions are always fully visible (no hover needed). The **Title** cell shows the log title, then a muted meta line below it reading `{log type} · Open since {N} days` (open logs only — "Open since today" / "1 day" / "N days", computed from the log's creation/start date; closed logs show just the log type), then any category badges. **Clicking anywhere on a log row opens the Log Editor** — with one exception: clicking a link inside the description opens that link in the browser instead.
@@ -315,7 +315,7 @@ A flat table display of logs across all projects (formerly called "Deadlines" �
 
 Open logs sorted by due date ASC (no due date → end of the open group); closed logs come after, sorted by due date **DESC** (most recent deadline first, no due date last), and render greyed out with no deadline color. Order comes from the shared `compareLogs()` in `types.ts`, also used by the Project view. Descriptions are always fully expanded — no hover needed.
 
-**Filters**: the Table view embeds the same `FilterPanel` component as the Project view — funnel icon + chips in the page header (which contains **only** these filter controls — no page title or log count), and the same filter drawer — with identical matching semantics (AND logic, categories inherited from ancestor projects, project filter covering the selected subtree). One log-centric adaptation: here "Show closed" reveals closed **logs** (hidden by default). **Filter state is shared** between the Project view and the Table view via Svelte stores in `store.ts` (`showClosed`, `selCat1–4`, `selProject`, `selLogType`) — switching pages keeps the same filters applied. Filters reset on app restart (in-memory only).
+**Filters**: the Table view embeds the same `FilterPanel` component as the Project view — funnel icon + chips in the page header (which contains **only** these filter controls — no page title or log count), and the same filter drawer — with identical matching semantics (AND logic, categories inherited from ancestor projects, project filter covering the selected subtree). One log-centric adaptation: here closed **logs** are hidden in the unfiltered view and included while any filter is active. **Filter state is shared** between the Project view and the Table view via Svelte stores in `store.ts` (`selCat1–4`, `selProject`, `selLogType`, `searchQuery`) — switching pages keeps the same filters applied. Filters reset on app restart (in-memory only).
 
 **Row click behavior** (same Log/Project editors as the main view, rendered on the page):
 - Clicking the **Project** column opens the **Project Editor** for the log's project.
@@ -334,7 +334,7 @@ Open logs sorted by due date ASC (no due date → end of the open group); closed
 
 ### Templates Page
 
-At `/templates`, via the **Templates** tab. Behaves like the homepage — same project cards (links above the logs table, fold all, ＋ Sub-project / ＋ Link / + log buttons, editors), "+ New Template" button — **except there are no filters** (no filter drawer/funnel icon, no project lookup, no log type filter, no show-closed toggle; closed template content is always visible). Only **template projects** (`is_template = 1`) are shown here, and they appear nowhere else in the app.
+At `/templates`, via the **Templates** tab. Behaves like the homepage — same project cards (links above the logs table, fold all, ＋ Sub-project / ＋ Link / + log buttons, editors), "+ New Template" button — **except there are no filters** (no filter drawer/funnel icon, no project lookup, no log type filter; closed template content is always visible). Only **template projects** (`is_template = 1`) are shown here, and they appear nowhere else in the app.
 
 **Cloning**: top-level template cards have an accent **⧉ Clone** button. It opens a small dialog asking for the new project's title (pre-filled with the template's title). Confirming deep-copies the entire tree — logs, links, sub-projects, and their logs/links recursively (`clone_project` command → `project_repo::clone_tree`). The copy:
 - is a **regular project** (never a template) that appears on the homepage;
@@ -359,7 +359,7 @@ Fields, in layout order:
 
 Validation: **Title, Log Type, Due Date and Project are mandatory** — empty mandatory inputs get a red border, and Save/Create stays disabled until all are filled. Due Date is enforced UI-side only: legacy logs without one keep their NULL until edited, at which point a date must be set.
 
-**Closed Points in the views** (project card log tables and Table view): when a log has Closed Points content, a thin separator line and an italic "**See more…**" link render below the open points. Clicking it expands the closed points inline (indented, left-bordered) and turns into "See less"; clicking doesn't open the Log Editor. A global "**▸/▾ Closed points**" toggle button (Project view header next to Fold all; Table view header right side) expands/collapses closed points for **all** logs — flipping it clears any per-log See more/less choices (they act as exceptions on top of the global state). The toggle is shared between both views via the `expandClosedPoints` store (in-memory, resets on restart). Empty-but-saved rich text (e.g. `<p><br></p>`) is not treated as content (`hasRichText()` in `types.ts`).
+**Closed Points in the views** (project card log tables and Table view): when a log has Closed Points content, a thin separator line and an italic "**See more…**" link render below the open points. Clicking it expands the closed points inline (indented, left-bordered) and turns into "See less"; clicking doesn't open the Log Editor. Closed points are collapsed by default and all expanded while a log search is active (see the log search); there is no global expand toggle (the "Closed points" header button was removed in 0.4.14). Empty-but-saved rich text (e.g. `<p><br></p>`) is not treated as content (`hasRichText()` in `types.ts`).
 
 ### Project Editor (slide-in panel, 480px wide)
 

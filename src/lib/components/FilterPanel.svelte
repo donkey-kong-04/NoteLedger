@@ -2,7 +2,7 @@
   import { get } from 'svelte/store';
   import { onDestroy, tick } from 'svelte';
   import CategoryFilter from './CategoryFilter.svelte';
-  import { picklists, projects, settings, saveSettings, showClosed, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen, searchQuery } from '../store';
+  import { picklists, projects, settings, saveSettings, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen, searchQuery } from '../store';
   import { sortedProjectOptions, CAT_COLORS } from '../types';
   import type { PicklistValue } from '../types';
 
@@ -78,7 +78,6 @@
     $selCat1 = []; $selCat2 = []; $selCat3 = []; $selCat4 = [];
     $selProject = null;
     $selLogType = null;
-    $showClosed = false;
     $searchQuery = '';
   }
 
@@ -109,11 +108,6 @@
       color: CAT_COLORS[d.type],
       clear: () => d.store.update(a => a.filter(x => x !== id)),
     }))),
-    ...($showClosed ? [{
-      key: 'closed',
-      label: 'Closed shown',
-      clear: () => showClosed.set(false),
-    }] : []),
   ] as Chip[];
 
   $: activeCount = chips.length;
@@ -246,12 +240,6 @@
               {/if}
             </div>
           {/if}
-          <label class="toggle-wrap" title="Show closed items">
-            <span class="toggle-switch" class:on={$showClosed} on:click={() => $showClosed = !$showClosed} role="switch" aria-checked={$showClosed} tabindex="0" on:keydown={e => e.key === ' ' && ($showClosed = !$showClosed)}>
-              <span class="toggle-thumb"></span>
-            </span>
-            <span class="toggle-label">Show closed</span>
-          </label>
         </div>
       </section>
 
@@ -424,26 +412,6 @@
   .cat-cell { min-width: 0; }
 
   /* ── Controls (same look as the old top-bar versions) ── */
-  .toggle-wrap {
-    display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none;
-    flex-shrink: 0;
-  }
-  .toggle-label { font-size: 13px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
-  .toggle-switch {
-    width: 36px; height: 20px; border-radius: 10px;
-    background: var(--surface-3); border: 1px solid var(--border);
-    position: relative; cursor: pointer;
-    transition: background 0.2s, border-color 0.2s;
-    display: flex; align-items: center;
-  }
-  .toggle-switch.on { background: var(--accent); border-color: var(--accent); }
-  .toggle-thumb {
-    width: 14px; height: 14px; border-radius: 50%;
-    background: #fff; position: absolute; left: 2px;
-    transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-  }
-  .toggle-switch.on .toggle-thumb { left: 18px; }
-
   .project-lookup { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
   .project-lookup-input {
     background: var(--surface-2); color: var(--text);

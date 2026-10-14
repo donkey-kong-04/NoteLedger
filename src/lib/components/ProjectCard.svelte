@@ -2,7 +2,7 @@
   import Badge from './Badge.svelte';
   import { createEventDispatcher } from 'svelte';
   import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, hasRichText, compareLogs } from '../types';
-  import { expandClosedPoints, selProject, searchTokens, searchActive } from '../store';
+  import { selProject, searchTokens, searchActive } from '../store';
   import type { Log, Project, PicklistValue, ProjectLink } from '../types';
   import { openLink } from '../types';
   import { sanitizeHtml } from '../sanitize';
@@ -15,7 +15,6 @@
   export let allProjects: Project[];
   export let visibleProjectIds: Set<number> = new Set();
   export let ancestorOnlyProjectIds: Set<number> = new Set();
-  export let showClosed: boolean = false;
   export let depth: number = 0;
   export let collapseSignal: number = 0;
   export let collapseAll: boolean = false;
@@ -32,8 +31,9 @@
   export let cat4Vals: PicklistValue[];
 
   const dispatch = createEventDispatcher();
-  // Sub-project cards unmount while their parent is folded; start from the
-  // global fold state so they come back folded after a "Fold all".
+  // Folded = this project's logs are hidden; its links and sub-projects stay
+  // visible. Cards mounted later (e.g. revealed by a filter change) start from
+  // the global fold state so they match a "Fold all".
   let collapsed = collapseAll;
   let showTypePicker = false;
 
@@ -88,11 +88,11 @@
 
   $: tokens = filterable ? $searchTokens : [];
 
-  // "See more/less" clicks are per-log exceptions to the global toggle;
-  // flipping the toggle (or starting/ending a search, which expands
-  // everything) clears them so it always hides/shows everything.
+  // Closed points are collapsed by default and all expanded during a search
+  // (a match may sit there). "See more/less" clicks are per-log exceptions;
+  // starting/ending a search clears them.
   let closedPointsOverride = new Set<number>();
-  $: resetClosedPointsOverride($expandClosedPoints, $searchActive);
+  $: resetClosedPointsOverride($searchActive);
   function resetClosedPointsOverride(..._deps: unknown[]) {
     closedPointsOverride = new Set();
   }
@@ -107,7 +107,8 @@
 <div class="node">
 <div class="project-block" class:closed={project.is_closed}>
   <div class="project-header" style="padding-left: 10px">
-    <button class="chevron" class:collapsed on:click={() => collapsed = !collapsed} aria-label="Toggle">
+    <button class="chevron" class:collapsed on:click={() => collapsed = !collapsed}
+      title={collapsed ? 'Show logs' : 'Hide logs'} aria-label={collapsed ? 'Show logs' : 'Hide logs'}>
       <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
         <path d={collapsed ? 'M3 2.5l4 2.5-4 2.5' : 'M2.5 3l2.5 4 2.5-4'}
           stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -158,111 +159,110 @@
     </div>
   </div>
 
-  {#if !collapsed}
-    <!-- Body: links first, then the logs table (sub-projects are outside, always visible) -->
-    {#if (ownLogs.length > 0 || ownLinks.length > 0) && !ancestorOnlyProjectIds.has(project.id)}
-      <div class="card-body">
-        {#if ownLinks.length > 0}
-          <div class="links-panel">
-            {#each ownLinks as link (link.id)}
-              <div class="link-row">
-                <button class="link-card" on:click|stopPropagation={() => openLink(link.url).catch(e => console.error('openLink failed:', e, link.url))}>
-                  <svg class="link-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M6.5 9.5a3.5 3.5 0 0 0 5 0l2-2a3.536 3.536 0 0 0-5-5L7.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                    <path d="M9.5 6.5a3.5 3.5 0 0 0-5 0l-2 2a3.536 3.536 0 0 0 5 5l1-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-                  </svg>
-                  <span class="link-card-label">{link.label}</span>
-                </button>
-                <button class="link-action" on:click|stopPropagation={() => dispatch('editLink', link)} title="Edit">✎</button>
-              </div>
-            {/each}
-          </div>
-        {/if}
-
-        {#if ownLogs.length > 0}
-          <div class="log-table-wrap">
-            <table class="log-table">
-              <thead>
-                <tr>
-                  <th class="col-title">Title</th>
-                  <th class="col-deadline">Deadline</th>
-                  <th class="col-desc">Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each ownLogs as log (log.id)}
-                  {@const dl = log.due_date && !log.is_closed ? deadlineColor(log.due_date) : null}
-                  {@const dlText = dl ? contrastText(dl) : '#fff'}
-                  {@const badges = getCatBadges(log)}
-                  {@const type = getLogType(log)}
-                  {@const typeMeta = [type?.label, openSinceLabel(log)].filter(Boolean).join(' · ')}
-                  <tr
-                    class="log-row"
-                    class:log-closed={log.is_closed}
-                    on:click={() => dispatch('edit', log)}
-                    role="button" tabindex="0"
-                    on:keydown={e => e.key === 'Enter' && dispatch('edit', log)}
-                  >
-                    <td class="col-title">
-                      <span class="log-title">{#each highlightSegments(log.title, tokens) as seg}{#if seg.hit}<mark class="search-hit">{seg.text}</mark>{:else}{seg.text}{/if}{/each}</span>
-                      {#if typeMeta}
-                        <span class="log-type">{typeMeta}</span>
-                      {/if}
-                      {#if badges.length > 0}
-                        <div class="log-badges">
-                          {#each badges as badge}
-                            <Badge label={badge.val.label} catType={badge.type} selected={true} clickable={false} size="sm" />
-                          {/each}
-                        </div>
-                      {/if}
-                    </td>
-                    <td class="col-deadline">
-                      {#if log.due_date}
-                        <span class="deadline-pill" style="background:{dl}; color:{dlText}">{log.due_date}</span>
-                      {/if}
-                    </td>
-                    <td class="col-desc">
-                      {#if log.description}
-                        <div class="log-desc" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.description), tokens)}</div>
-                      {/if}
-                      {#if hasRichText(log.closed_description)}
-                        {@const cpOpen = closedPointsOverride.has(log.id) ? !$expandClosedPoints : $expandClosedPoints}
-                        <div class="closed-points-sep"></div>
-                        <button class="closed-points-more" on:click|stopPropagation={() => toggleClosedPoints(log.id)}>
-                          {cpOpen ? 'See less' : 'See more…'}
-                        </button>
-                        {#if cpOpen}
-                          <div class="log-desc closed-points" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.closed_description), tokens)}</div>
-                        {/if}
-                      {/if}
-                    </td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        {/if}
-      </div>
-    {/if}
-
-    {#if ownLogs.length === 0 && ownLinks.length === 0 && visibleSubProjects.length === 0 && !ancestorOnlyProjectIds.has(project.id)}
-      {#if ownLogsTotal.length > 0}
-        <p class="empty">No logs matching the filters.</p>
-      {:else}
-        <p class="empty">No logs yet — click <strong>+</strong> to add one.</p>
+  <!-- Body: links first, then the logs table (hidden while folded). Sub-projects
+       are outside, always visible. -->
+  {#if (ownLinks.length > 0 || (!collapsed && ownLogs.length > 0)) && !ancestorOnlyProjectIds.has(project.id)}
+    <div class="card-body">
+      {#if ownLinks.length > 0}
+        <div class="links-panel">
+          {#each ownLinks as link (link.id)}
+            <div class="link-row">
+              <button class="link-card" on:click|stopPropagation={() => openLink(link.url).catch(e => console.error('openLink failed:', e, link.url))}>
+                <svg class="link-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M6.5 9.5a3.5 3.5 0 0 0 5 0l2-2a3.536 3.536 0 0 0-5-5L7.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                  <path d="M9.5 6.5a3.5 3.5 0 0 0-5 0l-2 2a3.536 3.536 0 0 0 5 5l1-1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+                </svg>
+                <span class="link-card-label">{link.label}</span>
+              </button>
+              <button class="link-action" on:click|stopPropagation={() => dispatch('editLink', link)} title="Edit">✎</button>
+            </div>
+          {/each}
+        </div>
       {/if}
+
+      {#if !collapsed && ownLogs.length > 0}
+        <div class="log-table-wrap">
+          <table class="log-table">
+            <thead>
+              <tr>
+                <th class="col-title">Title</th>
+                <th class="col-deadline">Deadline</th>
+                <th class="col-desc">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {#each ownLogs as log (log.id)}
+                {@const dl = log.due_date && !log.is_closed ? deadlineColor(log.due_date) : null}
+                {@const dlText = dl ? contrastText(dl) : '#fff'}
+                {@const badges = getCatBadges(log)}
+                {@const type = getLogType(log)}
+                {@const typeMeta = [type?.label, openSinceLabel(log)].filter(Boolean).join(' · ')}
+                <tr
+                  class="log-row"
+                  class:log-closed={log.is_closed}
+                  on:click={() => dispatch('edit', log)}
+                  role="button" tabindex="0"
+                  on:keydown={e => e.key === 'Enter' && dispatch('edit', log)}
+                >
+                  <td class="col-title">
+                    <span class="log-title">{#each highlightSegments(log.title, tokens) as seg}{#if seg.hit}<mark class="search-hit">{seg.text}</mark>{:else}{seg.text}{/if}{/each}</span>
+                    {#if typeMeta}
+                      <span class="log-type">{typeMeta}</span>
+                    {/if}
+                    {#if badges.length > 0}
+                      <div class="log-badges">
+                        {#each badges as badge}
+                          <Badge label={badge.val.label} catType={badge.type} selected={true} clickable={false} size="sm" />
+                        {/each}
+                      </div>
+                    {/if}
+                  </td>
+                  <td class="col-deadline">
+                    {#if log.due_date}
+                      <span class="deadline-pill" style="background:{dl}; color:{dlText}">{log.due_date}</span>
+                    {/if}
+                  </td>
+                  <td class="col-desc">
+                    {#if log.description}
+                      <div class="log-desc" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.description), tokens)}</div>
+                    {/if}
+                    {#if hasRichText(log.closed_description)}
+                      {@const cpOpen = closedPointsOverride.has(log.id) ? !$searchActive : $searchActive}
+                      <div class="closed-points-sep"></div>
+                      <button class="closed-points-more" on:click|stopPropagation={() => toggleClosedPoints(log.id)}>
+                        {cpOpen ? 'See less' : 'See more…'}
+                      </button>
+                      {#if cpOpen}
+                        <div class="log-desc closed-points" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.closed_description), tokens)}</div>
+                      {/if}
+                    {/if}
+                  </td>
+                </tr>
+              {/each}
+            </tbody>
+          </table>
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  {#if !collapsed && ownLogs.length === 0 && ownLinks.length === 0 && visibleSubProjects.length === 0 && !ancestorOnlyProjectIds.has(project.id)}
+    {#if ownLogsTotal.length > 0}
+      <p class="empty">No logs matching the filters.</p>
+    {:else}
+      <p class="empty">No logs yet — click <strong>+</strong> to add one.</p>
     {/if}
   {/if}
 </div>
 
-{#if !collapsed && visibleSubProjects.length > 0}
+{#if visibleSubProjects.length > 0}
   <div class="sub-tree">
     {#each visibleSubProjects as sub (sub.id)}
       <svelte:self
         project={sub}
         subProjects={allProjects.filter(p => p.parent_id != null && Number(p.parent_id) === Number(sub.id))}
         {allLogs} {allLogsTotal} {allProjects} {allLinks}
-        {visibleProjectIds} {ancestorOnlyProjectIds} {showClosed}
+        {visibleProjectIds} {ancestorOnlyProjectIds}
         {collapseSignal} {collapseAll}
         depth={depth + 1}
         {filterable}

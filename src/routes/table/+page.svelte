@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { logs, projects, picklists, settings, loadAll, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchTokens, searchActive } from '$lib/store';
+  import { logs, projects, picklists, settings, loadAll, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchTokens, searchActive, filtersActive } from '$lib/store';
   import { deadlineColor, contrastText, handleLinkClick, openSinceLabel, hasRichText, compareLogs } from '$lib/types';
   import type { Log, Project, PicklistValue } from '$lib/types';
   import Badge from '$lib/components/Badge.svelte';
@@ -16,11 +16,11 @@
 
   $: pageDensityStyle = densityStyle($settings.density);
 
-  // "See more/less" clicks are per-log exceptions to the global toggle;
-  // flipping the toggle (or starting/ending a search, which expands
-  // everything) clears them so it always hides/shows everything.
+  // Closed points are collapsed by default and all expanded during a search
+  // (a match may sit there). "See more/less" clicks are per-log exceptions;
+  // starting/ending a search clears them.
   let closedPointsOverride = new Set<number>();
-  $: resetClosedPointsOverride($expandClosedPoints, $searchActive);
+  $: resetClosedPointsOverride($searchActive);
   function resetClosedPointsOverride(..._deps: unknown[]) {
     closedPointsOverride = new Set();
   }
@@ -122,12 +122,11 @@
   // Project filter narrows to the selected project's subtree.
   $: selProjectIds = $selProject != null ? getDescendantIds(nonTemplateProjects, $selProject) : null;
 
-  // Same filter semantics as the homepage; "Show closed" here reveals closed
-  // logs (the page is log-centric, hidden-by-default like closed projects).
-  // A log search always looks in closed logs too.
+  // Same filter semantics as the homepage; the page is log-centric, so here
+  // closed logs are hidden in the unfiltered view and included by any filter.
   $: matchingLogs = $logs.filter(l =>
     !templateProjectIds.has(Number(l.project_id)) &&
-    ($showClosed || $searchActive || !l.is_closed) &&
+    ($filtersActive || !l.is_closed) &&
     (selProjectIds === null || selProjectIds.has(Number(l.project_id))) &&
     ($selLogType === null || l.type_id === $selLogType) &&
     logMatchesSlot(l, 1, $selCat1, nonTemplateProjects) &&
@@ -143,9 +142,6 @@
 <div class="page" style={pageDensityStyle}>
   <header class="page-header">
     <FilterPanel />
-    <button class="cp-toggle" class:toggle-on={$expandClosedPoints} on:click={() => $expandClosedPoints = !$expandClosedPoints}>
-      {$expandClosedPoints ? '▾' : '▸'} Closed points
-    </button>
   </header>
 
   <div class="table-wrap">
@@ -210,7 +206,7 @@
                   <div class="log-desc" on:click={handleLinkClick}>{@html highlightHtml(sanitizeHtml(log.description), $searchTokens)}</div>
                 {/if}
                 {#if hasRichText(log.closed_description)}
-                  {@const cpOpen = closedPointsOverride.has(log.id) ? !$expandClosedPoints : $expandClosedPoints}
+                  {@const cpOpen = closedPointsOverride.has(log.id) ? !$searchActive : $searchActive}
                   <div class="closed-points-sep"></div>
                   <button class="closed-points-more" on:click|stopPropagation={() => toggleClosedPoints(log.id)}>
                     {cpOpen ? 'See less' : 'See more…'}
@@ -265,17 +261,6 @@
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
-
-  .cp-toggle {
-    margin-left: auto;
-    background: none; color: var(--text-muted);
-    border: 1px solid var(--border); border-radius: 10px;
-    padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
-    font-family: inherit; transition: background 0.15s, color 0.15s;
-    display: inline-flex; align-items: center;
-  }
-  .cp-toggle:hover { background: var(--surface-2); color: var(--text); }
-  .cp-toggle.toggle-on { color: var(--accent); border-color: var(--accent); }
 
   .table-wrap {
     flex: 1;

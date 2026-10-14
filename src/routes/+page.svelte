@@ -6,7 +6,7 @@
   import LogEditor from '$lib/components/LogEditor.svelte';
   import ProjectEditor from '$lib/components/ProjectEditor.svelte';
   import LinkEditor from '$lib/components/LinkEditor.svelte';
-  import { settings, picklists, projects, logs, projectLinks, loadAll, pendingProjectFocus, showClosed, expandClosedPoints, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchQuery, searchTokens, searchActive } from '$lib/store';
+  import { settings, picklists, projects, logs, projectLinks, loadAll, pendingProjectFocus, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchQuery, searchTokens, filtersActive } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { logMatchesSlot, computeVisibility } from '$lib/filters';
   import { logMatchesSearch } from '$lib/search';
@@ -91,12 +91,10 @@
 
   // ── Project visibility ───────────────────────────────────────────────────
 
-  // A log search always looks in closed projects too (only those with a
-  // matching log show up, since a search counts as a log filter).
-  $: includeClosed = $showClosed || $searchActive;
-
+  // Closed projects are hidden in the unfiltered view; any filter includes
+  // them (with a log filter, only those with a matching log show up).
   $: ({ visible: visibleProjectIds, ancestorOnly: ancestorOnlyProjectIds } =
-    computeVisibility(visProjects, matchingLogs, $selProject, includeClosed, noLogFilter));
+    computeVisibility(visProjects, matchingLogs, $selProject, $filtersActive, noLogFilter));
 
   $: topLevelProjects = visProjects.filter(p => p.parent_id == null);
   $: visibleTopLevelProjects = topLevelProjects.filter(p => visibleProjectIds.has(p.id));
@@ -173,9 +171,6 @@
       <FilterPanel />
     </div>
     <nav class="menu-nav">
-      <button class="btn-secondary-sm" class:toggle-on={$expandClosedPoints} on:click={() => $expandClosedPoints = !$expandClosedPoints}>
-        {$expandClosedPoints ? '▾' : '▸'} Closed points
-      </button>
       <button class="btn-secondary-sm" on:click={toggleFoldAll}>{allCollapsed ? '▸ Unfold all' : '▾ Fold all'}</button>
       <button class="btn-secondary-sm" on:click={openNewProject}>+ New Project</button>
     </nav>
@@ -193,7 +188,6 @@
             allLinks={$projectLinks}
             {visibleProjectIds}
             {ancestorOnlyProjectIds}
-            showClosed={includeClosed}
             {collapseSignal}
             collapseAll={allCollapsed}
             depth={0}
@@ -316,7 +310,6 @@
     text-decoration: none; display: inline-flex; align-items: center;
   }
   .btn-secondary-sm:hover { background: var(--surface-2); color: var(--text); }
-  .btn-secondary-sm.toggle-on { color: var(--accent); border-color: var(--accent); }
 
   .cards {
     flex: 1; overflow-y: auto;

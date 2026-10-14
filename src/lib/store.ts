@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived } from 'svelte/store';
 import { parseSearchTokens } from './search';
 import { invoke } from '@tauri-apps/api/core';
 import type { UserSettings, PicklistValue, Log, Project, ProjectLink } from './types';
@@ -23,9 +23,6 @@ export const pendingProjectFocus = writable<number | null>(null);
 
 // Filter state, shared between the Home and Table views so switching pages
 // keeps the same filters applied.
-export const showClosed = writable(false);
-// UI-only: expand every log's "Closed Points" section instead of per-log clicks.
-export const expandClosedPoints = writable(false);
 export const selCat1 = writable<number[]>([]);
 export const selCat2 = writable<number[]>([]);
 export const selCat3 = writable<number[]>([]);
@@ -38,19 +35,14 @@ export const searchQuery = writable('');
 export const searchTokens = derived(searchQuery, parseSearchTokens);
 export const searchActive = derived(searchTokens, t => t.length > 0);
 
-// Searching expands every log's Closed Points (a match may sit there, and
-// it's easier to scan); the previous setting comes back once the search is
-// cleared.
-let expandBeforeSearch: boolean | null = null;
-searchActive.subscribe(active => {
-  if (active && expandBeforeSearch === null) {
-    expandBeforeSearch = get(expandClosedPoints);
-    expandClosedPoints.set(true);
-  } else if (!active && expandBeforeSearch !== null) {
-    expandClosedPoints.set(expandBeforeSearch);
-    expandBeforeSearch = null;
-  }
-});
+// True while any filter narrows what's shown (project, log type, categories,
+// search). Closed projects/logs are hidden in the unfiltered view and always
+// included while a filter is active.
+export const filtersActive = derived(
+  [selCat1, selCat2, selCat3, selCat4, selProject, selLogType, searchActive],
+  ([c1, c2, c3, c4, p, t, s]) =>
+    c1.length + c2.length + c3.length + c4.length > 0 || p !== null || t !== null || s
+);
 
 // Whether the filter drawer is open; lives here so the app shell in
 // +layout.svelte can shift the page content aside instead of being overlaid.

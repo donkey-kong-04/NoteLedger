@@ -2,7 +2,7 @@
   import Badge from './Badge.svelte';
   import { createPicklistValue, deletePicklistValue, updatePicklistValue } from '../store';
   import type { PicklistValue } from '../types';
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, tick } from 'svelte';
   import { CAT_COLORS } from '../types';
 
   const dispatch = createEventDispatcher();
@@ -77,13 +77,11 @@
     const exact = values.find(v => v.label.toLowerCase() === trimmed.toLowerCase());
     if (exact) {
       toggleValue(exact.id);
-      closeSearch();
       return;
     }
     // Otherwise create a new value and auto-select it
     const type = catType;
     searchText = '';
-    showSearch = false;
     try {
       const newVal = await createPicklistValue(type, trimmed);
       toggleValue(newVal.id);
@@ -99,8 +97,13 @@
     searchText = '';
   }
 
-  function openSearch() {
+  // Open (or keep) the search input focused, so after a selection the next
+  // value can be typed right away. preventScroll: focusing the input at the
+  // top of the scrollable list must not jump away from the clicked badge.
+  async function openSearch() {
     showSearch = true;
+    await tick();
+    inputEl?.focus({ preventScroll: true });
   }
 
   function commitLabel() {
@@ -144,12 +147,12 @@
         bind:value={searchText}
         bind:this={inputEl}
         placeholder="Search or add…"
+        on:input={() => inputEl.scrollIntoView({ block: 'nearest' })}
         on:blur={closeSearch}
         on:keydown={e => {
           if (e.key === 'Enter') { e.preventDefault(); handleEnter(); }
           if (e.key === 'Escape') { isClicking = false; closeSearch(); }
         }}
-        autofocus
       />
     {:else}
       <button class="add-btn" on:click={openSearch}>Add or search</button>
@@ -170,7 +173,7 @@
             label={val.label}
             catType={catType}
             selected={selected.includes(val.id)}
-            on:click={() => toggleValue(val.id)}
+            on:click={() => { toggleValue(val.id); openSearch(); }}
           />
           {#if selected.includes(val.id)}
             <button class="action-btn" on:click={() => startEdit(val)} title="Edit value">✎</button>
@@ -223,9 +226,12 @@
     align-items: center;
   }
 
-  /* In the drawer, long value lists scroll instead of growing the panel */
+  /* In the drawer, long value lists scroll instead of growing the panel.
+     At most 3 badge rows (~20px each + gaps), then scroll: long lists are
+     meant to be narrowed with the search. The few spare px let a 4th row peek
+     in as a hint that the list scrolls. */
   .cat-filter.vertical .badges {
-    max-height: 180px;
+    max-height: 82px;
     overflow-y: auto;
     align-content: flex-start;
     padding-right: 4px;
