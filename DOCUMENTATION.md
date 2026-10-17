@@ -29,13 +29,13 @@ The application is developed using:
 
 ## Security
 - **CSP enabled** in `src-tauri/tauri.conf.json` (`app.security.csp` + `devCsp`): scripts/assets restricted to `'self'`, Tauri IPC allowed via `ipc:`/`http://ipc.localhost`, inline `style=` attributes allowed. Tauri auto-adds hashes for its own injected scripts in bundled assets. `dangerousDisableAssetCspModification: ["style-src"]` stops Tauri from adding a style hash in release builds — a hash in `style-src` makes WebKit ignore `'unsafe-inline'` (and WKWebView doesn't support `style-src-attr`), which silently blocked all rich-text inline styles (bold/italic/color) in packaged apps. Do not remove without retesting formatting in a packaged build.
-- **HTML sanitization** (`src/lib/sanitize.ts`, DOMPurify): log/project descriptions are stored as rich-text HTML. Every path that turns that HTML into DOM goes through `sanitizeHtml()` — the three `{@html}` render sites (LogCard, ProjectCard, Table view), the RichTextEditor load (`editor.innerHTML`), its `syncValue()` save, and pasted `text/html`. Allowlist: formatting tags, lists, spans/font with `href`/`style`/`color` attributes only.
+- **HTML sanitization** (`src/lib/sanitize.ts`, DOMPurify): log/project descriptions are stored as rich-text HTML. Every path that turns that HTML into DOM goes through `sanitizeHtml()` — the `{@html}` render sites (LogCard, ProjectCard), the RichTextEditor load (`editor.innerHTML`), its `syncValue()` save, and pasted `text/html`. Allowlist: formatting tags, lists, spans/font with `href`/`style`/`color` attributes only.
 - **URL opening** (`openLink()` in `src/lib/types.ts`): only `http:`, `https:` and `mailto:` URLs are passed to the opener plugin; anything else (e.g. `file:`) is refused with a console warning. The capability file grants only `opener:allow-open-url` + default-URL scope.
 - **SQL**: all queries use parameterized statements; the only interpolated identifiers are compile-time constant junction-table names.
 
 ## Testing & CI
 - **Rust:** `cd src-tauri && cargo test --lib` — in-memory SQLite tests covering migrations and repository data-integrity rules (`src-tauri/src/db/tests.rs`).
-- **Frontend:** `npm test` (vitest) — pure filter/visibility logic extracted to `src/lib/filters.ts` (`src/lib/filters.test.ts`).
+- **Frontend:** `npm test` (vitest) — pure filter/visibility logic extracted to `src/lib/filters.ts` (`src/lib/filters.test.ts`), log search in `src/lib/search.ts` (`search.test.ts`) and Calendar view date helpers in `src/lib/calendar.ts` (`calendar.test.ts`).
 - **Type-check:** `npm run check` (svelte-check) must report 0 errors.
 - CI (`.github/workflows/build.yml`) runs all three in `frontend`/`rust` jobs that must pass before the `build` matrix job produces installer artifacts for **Windows (MSI/NSIS), macOS (DMG, Apple Silicon) and Linux (deb/AppImage, ubuntu-22.04)**.
 
@@ -90,7 +90,7 @@ A project groups logs together and can be nested under a parent project.
 - Deleting a project is blocked if it has sub-projects or logs.
 - Closed projects are hidden in the unfiltered view and included whenever any filter is active (see [Closed Items](#closed-items)).
 - Projects can have category values assigned (see junction tables below).
-- `is_template` is fixed at creation time (not updatable). A sub-project always inherits its parent's flag at insert (enforced in `project_repo::insert`), so a template tree stays consistently marked. Template projects and their logs are excluded from the Project view and Table view pages.
+- `is_template` is fixed at creation time (not updatable). A sub-project always inherits its parent's flag at insert (enforced in `project_repo::insert`), so a template tree stays consistently marked. Template projects and their logs are excluded from the Project view.
 
 ### Tables: `project_category_1`, `project_category_2`, `project_category_3`, `project_category_4`
 Junction tables for many-to-many category assignments on projects.
@@ -160,9 +160,9 @@ All blocks are enforced in the repository layer and surfaced as inline error tex
 
 ### Layout Overview
 
-The app has a global **navigation bar** at the very top (shared by every page via the layout): a "Note Ledger" text wordmark sits at the left edge (bold, theme text color — dark in light mode, light in dark mode; no icon), followed by the **app version** in smaller muted text (e.g. "Note Ledger 0.4.5") — read at build time from `package.json` via a Vite JSON import in `+layout.svelte`, so it updates automatically with every version bump. A centered segmented tab control (`NavTabs.svelte`) switches between the views — **Project view | Table view | Templates | Settings**. The active tab is highlighted as a solid accent-colored pill with white text; the strip background is a darker surface shade for contrast. New pages are added by appending to the `tabs` array in `NavTabs.svelte`.
+The app has a global **navigation bar** at the very top (shared by every page via the layout): a "Note Ledger" text wordmark sits at the left edge (bold, theme text color — dark in light mode, light in dark mode; no icon), followed by the **app version** in smaller muted text (e.g. "Note Ledger 0.4.5") — read at build time from `package.json` via a Vite JSON import in `+layout.svelte`, so it updates automatically with every version bump. A centered segmented tab control (`NavTabs.svelte`) switches between the views — **Calendar view | Project view | Templates | Settings** (a flat "Table view" page of all logs existed until it was removed in 1.0.0 as redundant with the project cards' log tables). The active tab is highlighted as a solid accent-colored pill with white text; the strip background is a darker surface shade for contrast. New pages are added by appending to the `tabs` array in `NavTabs.svelte`.
 
-Below the navigation bar, the main screen (**Project view**, the `/` route — historically "homepage") is divided into three zones:
+The app opens on the **Calendar view** (the `/` route, the default view since 1.0.0 — see [Calendar View Page](#calendar-view-page)). The **Project view** (the `/projects` route — historically "homepage", and the `/` route before 1.0.0) is divided into three zones:
 
 - **Menu bar (top)**: split into two groups.
   - **Left group**: the **filter funnel icon** and the active-filter **chips** (see Filter Drawer below).
@@ -174,7 +174,7 @@ All spacing in the menu bar, main grid, log/project cards, settings page, and lo
 
 ### Filter Drawer
 
-All filters live in a single component, `FilterPanel.svelte`, used by both the Project view and the Table view. It renders these things:
+All filters live in a single component, `FilterPanel.svelte`, used by the Project view (the Calendar view has no filters). It renders these things:
 
 1. **Funnel icon button** (left side of the page header). Clicking toggles the drawer. When any filter is active, the icon is accent-colored and carries a **count badge** with the number of active filters.
 2. **Quick-search (magnifier) icon button**, right of the funnel. One click opens the drawer, focuses the **project lookup** input and opens its dropdown, so you can type a project name immediately. Like focusing the lookup manually, it clears the current project filter to start a fresh search.
@@ -182,10 +182,10 @@ All filters live in a single component, `FilterPanel.svelte`, used by both the P
    - The query is split on whitespace into **tokens**; each token matches **case-insensitively as a substring** — `abc ghi` matches "abc def ghi" and also "abcdefghi". Duplicate tokens are ignored; regex characters are literal.
    - **AND logic at the log level**: a log is shown only if **every** token is found, but each token may sit in **any** of the three fields (one in the title, another in the open points, another in the closed points is a match). A single token never matches across two fields.
    - It combines with all other filters (AND). In the Project view, projects with no matching logs are hidden while a search is active (like a category filter).
-   - **Closed items are always searched**: like every filter, a search includes closed logs (Table view) and closed projects (Project view) — only those with a matching log appear, still greyed out as closed (see [Closed Items](#closed-items)).
-   - **Highlighting**: every occurrence of every token is wrapped in a yellow `<mark class="search-hit">` (global style in `+layout.svelte`, same yellow + dark text in both themes) — in log titles and inside the open/closed points rich text, in both views. Overlapping tokens merge into one highlight; a match spanning formatting (e.g. a half-bold word) is still highlighted. Highlighting is done after sanitizing, with DOM APIs (no markup injected). Not applied on the Templates page.
+   - **Closed items are always searched**: like every filter, a search includes closed projects — only those with a matching log appear, still greyed out as closed (see [Closed Items](#closed-items)).
+   - **Highlighting**: every occurrence of every token is wrapped in a yellow `<mark class="search-hit">` (global style in `+layout.svelte`, same yellow + dark text in both themes) — in log titles and inside the open/closed points rich text. Overlapping tokens merge into one highlight; a match spanning formatting (e.g. a half-bold word) is still highlighted. Highlighting is done after sanitizing, with DOM APIs (no markup injected). Not applied on the Templates page.
    - **Closed points auto-expand**: while a search is active, every log's Closed Points are shown, whether or not a token matched there; per-log See more/less choices are reset when the search starts and ends. Clearing the search collapses them again; See less still works during a search.
-   - **×** button inside the input (or **Escape**) clears the search. The search is shared between the Project and Table views, cleared by **Clear all**, and cleared when a newly created project/log is focused.
+   - **×** button inside the input (or **Escape**) clears the search. The search is cleared by **Clear all**, and cleared when a newly created project/log is focused.
 4. **✕ Clear all button** (red outline), right of the icons, visible **only while at least one filter is active**. Clears every filter at once: project, log type, all category selections and the log search. (This used to live in the drawer header; it is now always reachable without opening the drawer.)
 5. **Active-filter chips**, shown next to the buttons at all times (even with the drawer closed) so active filters are never hidden state. One chip per active filter — selected project, log type, and each selected category value (tinted with its category color). Each chip has an **×** that clears just that filter.
 6. **The drawer** itself: a non-modal panel (440px) that slides in from the left edge and **pushes the page content to the right** instead of overlaying it (the app shell gets matching left padding, animated in sync), so the main view stays fully visible and updates live as filters are toggled. Closed via the funnel icon, the ✕ button, **Escape**, or clicking anywhere outside the drawer. Open state lives in the `filterDrawerOpen` store so the layout can react; it resets when navigating to a page without filters. Header row: "Filters" title and the close button. Body sections:
@@ -198,7 +198,7 @@ The filter *behaviors* below are unchanged from the previous top-bar/sidebar des
 ### Closed Items
 
 There is no "Show closed" toggle (removed in 0.4.14) — closed items appear through filtering:
-- **No filter active**: closed **projects** are hidden (Project view) and closed **logs** are hidden (Table view). In the Project view, closed logs are always shown inside visible projects (greyed out at 60% opacity).
+- **No filter active**: closed **projects** are hidden. Closed logs are always shown inside visible projects (greyed out at 60% opacity).
 - **Any filter active** — project, log type, a category value or the log search (`filtersActive` store in `store.ts`): closed projects (rendered at 55% opacity) and closed logs are included. With a log-narrowing filter (log type, category, search), a closed project only appears if its subtree has a matching log. To see one closed project, pick it in the project lookup.
 
 ### Project Lookup
@@ -277,7 +277,7 @@ Each **project card** contains:
 - **Header row**: fold chevron (hides/shows the card's logs) | project title (clickable → opens Project Editor) | **filter icon** (small funnel — sets the project filter to this project, same as picking it in the project lookup; clicking it again on the filtered project clears the filter; shown in accent color while active; hidden on the Templates page via `filterable={false}`) | assigned category badges (inline, wrapping) | "Closed" pill (if closed) | open/total log count badge | **＋ Sub-project** button | **＋ Link** button | **+** button
 - **Body** (shown when the project has logs or links): no tabs — links and logs are shown together, **links always first**, then the logs table. Each section only appears when it has content (no empty-state placeholders). Sub-projects render below the card.
   - **Links**: project links displayed as Confluence-style cards (chain icon + label), flowing horizontally with wrapping across the full width, directly above the logs table. Clicking a card opens the URL in the system default browser. A ✎ button opens the Link Editor.
-  - **Logs table**: bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date **DESC** (most recent deadline first), then closed logs without due date. Same order as the Table view (shared `compareLogs()` in `types.ts`). Closed log rows are greyed out. Descriptions are always fully visible (no hover needed). The **Title** cell shows the log title, then a muted meta line below it reading `{log type} · Open since {N} days` (open logs only — "Open since today" / "1 day" / "N days", computed from the log's creation/start date; closed logs show just the log type), then any category badges. **Clicking anywhere on a log row opens the Log Editor** — with one exception: clicking a link inside the description opens that link in the browser instead.
+  - **Logs table**: bordered table with columns **Title**, **Deadline**, **Description** — sorted: open logs with due date ASC, then open logs without due date, then closed logs with due date **DESC** (most recent deadline first), then closed logs without due date. Order comes from `compareLogs()` in `types.ts`. Closed log rows are greyed out. Descriptions are always fully visible (no hover needed). The **Title** cell shows the log title, then a muted meta line below it reading `{log type} · Open since {N} days` (open logs only — "Open since today" / "1 day" / "N days", computed from the log's creation/start date; closed logs show just the log type), then any category badges. **Clicking anywhere on a log row opens the Log Editor** — with one exception: clicking a link inside the description opens that link in the browser instead.
 - Sub-projects rendered nested below the body: each sub-project is connected to its parent by **tree connector lines** (a vertical trunk plus an elbow into each child's header, colored like the project headers), making the hierarchy path visually explicit.
 
 The **＋ Sub-project** button opens the Project Editor pre-filled with the current project as the parent. The **＋ Link** button opens the **Link Editor** (slide-in panel, 400px wide) to add a labelled URL to the project. The **+** button opens a **type picker** dropdown (purple background, white text). Selecting a log type opens the Log Editor pre-filled with that type and the project.
@@ -294,36 +294,7 @@ When a project has no logs to display:
 
 When there are **no projects at all**, the page shows a page-level empty state: *"No projects yet. Click + New Project to get started."* (a project must exist before any log can be created).
 
-### Link Editor (slide-in panel, 400px wide)
-
-Fields:
-- Label (required) — display name for the link
-- URL (required) — the full URL (e.g. `https://…`)
-
-The project name is shown as a subtitle below the panel title. Supports create, edit, and delete. Links open in the system default browser via `opener:allow-default-urls`.
-
-### Table View Page
-
-A flat table display of logs across all projects (formerly called "Deadlines" — renamed because deadlines are also visible on the homepage; what distinguishes this page is the flat table layout). Accessible via the **"Table view"** tab in the navigation bar, at the `/table` route. Shows all **open logs** (closed logs excluded), with columns:
-
-| Column | Notes |
-|---|---|
-| Project | Full project path (ancestors joined with `›`); category badges assigned to the project shown below the path |
-| Log | Log title; a muted `{log type} · Open since {N} days` meta line below it (all table-view logs are open); category badges assigned to the log shown below that |
-| Deadline | Color-coded pill (see color rules below); blank if no due date |
-| Description | Full rich text, not truncated |
-
-Open logs sorted by due date ASC (no due date → end of the open group); closed logs come after, sorted by due date **DESC** (most recent deadline first, no due date last), and render greyed out with no deadline color. Order comes from the shared `compareLogs()` in `types.ts`, also used by the Project view. Descriptions are always fully expanded — no hover needed.
-
-**Filters**: the Table view embeds the same `FilterPanel` component as the Project view — funnel icon + chips in the page header (which contains **only** these filter controls — no page title or log count), and the same filter drawer — with identical matching semantics (AND logic, categories inherited from ancestor projects, project filter covering the selected subtree). One log-centric adaptation: here closed **logs** are hidden in the unfiltered view and included while any filter is active. **Filter state is shared** between the Project view and the Table view via Svelte stores in `store.ts` (`selCat1–4`, `selProject`, `selLogType`, `searchQuery`) — switching pages keeps the same filters applied. Filters reset on app restart (in-memory only).
-
-**Row click behavior** (same Log/Project editors as the main view, rendered on the page):
-- Clicking the **Project** column opens the **Project Editor** for the log's project.
-- Clicking **anywhere else on the row** opens the **Log Editor** for that log.
-- Exception: clicking a link inside the description opens the link in the browser instead of the editor.
-- Edits are reflected in the table immediately after save; closing a log from the editor removes it from the list (only open logs are shown).
-
-**Deadline color rules** (applied in both the project card log table and the Table view page; closed logs are never color-coded):
+**Deadline color rules** (the Deadline cell of the project card log tables; closed logs are never color-coded):
 
 | Color | Condition |
 |---|---|
@@ -332,14 +303,40 @@ Open logs sorted by due date ASC (no due date → end of the open group); closed
 | 🟢 Green | Due date is beyond next week |
 | — | No due date, or log is closed |
 
+### Link Editor (slide-in panel, 400px wide)
+
+Fields:
+- Label (required) — display name for the link
+- URL (required) — the full URL (e.g. `https://…`)
+
+The project name is shown as a subtitle below the panel title. Supports create, edit, and delete. Links open in the system default browser via `opener:allow-default-urls`.
+
+### Calendar View Page
+
+A month calendar of **open logs placed on their due date** — the app's **default view**, at the `/` route (**"Calendar view"**, the first tab in the navigation bar, `src/routes/+page.svelte`).
+
+- **Continuous scroll**: every month is visible in **one scrolling list**, stacked top to bottom — just scroll up/down to move through months (no paging). Each month is a block with its title (e.g. "October 2026", accent-colored for the current month) followed by its weeks. The **weekday header** (Mon–Fri, or Mon–Sun with weekends) stays pinned at the top while scrolling, and each **month title** stays pinned under it until the next month pushes it away.
+- **Months and weeks listed**: from the **current week** to **next month** (only one month ahead — or up to the month of the latest open deadline, when a log is due later than that). **The past only shows where open logs are**: a past week (any week before the current one — including earlier weeks of the current month) is shown only if one of its days has an open log, and a past month with no open log is hidden entirely (`shownWeeks()` in `calendar.ts`, unit-tested). So overdue logs are never out of reach, while empty past weeks never take space — nothing gets planned in the past. When weeks or months appear/disappear above the viewport (e.g. after moving old logs), the first visible day keeps its place on screen. The page opens scrolled to the **current month**.
+- **Grid**: one row per week; each day is a small card. Days belonging to another month are **left blank** (a week spanning two months appears in both blocks, each showing only its own days), so a log never appears twice. The **current week** (Monday–Sunday) stands out: all its days get an accent-tinted background and an accent border (weekend days keep their read-only shade under the tint; a week spanning two months is highlighted in both blocks). Today's card has the strongest accent outline and its date is an accent-colored pill. Date helpers live in `src/lib/calendar.ts` (unit-tested).
+- **Weekends**: a **"Show weekends"** checkbox in the page header, **off by default** (remembered per machine in `localStorage`, key `noteledger.calendar.showWeekends`). Off → **Monday–Friday** (5 columns); on → **Monday–Sunday** (7 columns). **Safety rule**: weekends are always shown while **any displayed log is due on a Saturday or Sunday**, whatever the checkbox says, so a log put on a wrong date is never hidden (no extra warning: the weekend columns appearing is the signal). (With weekends hidden, a week whose only days in the month fall on the weekend is skipped.) Weekend days use a **darker, muted background** (`--weekend-bg`: `#dde1e7` light / `#0e1420` dark, muted day number and header) that reads as a read-only input, and they are **not drop targets** (see drag & drop).
+- **This week** button (right of the page header): jumps back to the **current week** from anywhere in the list — it scrolls the week to the middle of the view and briefly flashes all its days with an accent glow. There are no previous/next month buttons — just scroll.
+- **Only open logs**, and only those with a **due date** — closed logs and logs without a deadline are never on the calendar.
+- **One card per project and day**: a day's logs are grouped by project — cards sorted A-Z by **project path** (ancestors joined with `›`, e.g. "Client X › Phase 1"), logs A-Z by title within a card. Each card (tinted background + colored left bar) shows the **project path on top** (small, muted, 12px; its own click target) and then **one row per log** (14px title); several logs of the same project that day stack inside the same card, **separated by thin lines**. Each row is its own click/drag target and highlights on hover. Cards show only the project and the log titles — no type, categories or points. Long titles and paths are **never truncated**: they wrap over as many lines as needed, and the day card grows to fit. Hovering a log shows its title and the actions (click to edit · drag to reschedule). Cards on a day **before today** (overdue, since all logs are open) are tinted red; others use the accent color. Dragging a log moves only that log (its row is dimmed; the whole card when it's the only log).
+- **Clicking a log** opens the **Log Editor** for it; saving updates the calendar (a changed due date moves the log, closing it removes it).
+- **Click a day to create a log**: clicking anywhere on a weekday card (outside its logs) opens the **Log Editor** for a **new log due that day** — the due date is pre-filled (the project defaults to the first one; pick it in the editor). A small **+** button also appears in the card's top-right corner on hover (keyboard-accessible). Weekend days are read-only: no creation there (like drops).
+- **Click a project name** (the path at the top of a card; underlined on hover) to open the **Project view filtered on that project** (all other filters cleared — same `pendingProjectFocus` handoff as cloning a template).
+- **Drag & drop to reschedule**: drag a log chip onto another day to change its **due date** (saved immediately; nothing else on the log changes). The drop target is outlined in the accent color; a semi-transparent copy of the chip follows the pointer and the original is dimmed. **Only weekdays accept drops** — weekend days (and blank cells of other months) show a "not allowed" cursor; a log already on a weekend can be dragged out to a weekday. Dragging near the top or bottom edge **auto-scrolls** to reach other months. **Escape** cancels the drag; dropping on the same day does nothing. A press only turns into a drag after moving ~5px, so a plain click still opens the editor. Built on pointer events (not HTML5 drag & drop, which the Tauri webview can intercept on Windows); the store's `moveLogDueDate()` (wrapping `moveLogsDueDates()`) updates the log optimistically, then reloads from the DB (which also reverts it if the save fails).
+- **Move old logs**: a button in the page header (with a count pill) that reschedules leftovers from past weeks into the current week. It is **shown only while past weeks still hold open logs** — hidden otherwise. **"Old" logs** = the open logs the calendar shows whose due date is **before the current week** — any past week, not only the last one (the week runs Monday–Sunday; Sunday still belongs to the current week, Monday starts a new one). Each log lands on **its own weekday of the current week** — a Tuesday log goes to this week's Tuesday, whichever week it came from (`sameWeekdayInWeekOf()` in `calendar.ts`). Clicking opens a **confirmation dialog** ("Are you sure?") previewing every move (e.g. "Tue, Jul 7 → Tue, Oct 13"); moves landing on a day of this week that has **already passed** are shown in red, with a note that they stay overdue. **Move N logs** (focused, so Enter confirms) applies it; **Cancel**, **Escape** or a click outside closes without changes. Uses the same `moveLogsDueDates()` store function as drag & drop (due dates only, optimistic, reloaded from the DB; a save error is shown in the dialog).
+- **No filters**: the Calendar view has no filter bar or drawer — it always shows **every open log with a due date**, except logs of **closed projects** (or under a closed ancestor — hidden like in the unfiltered Project view, via `computeVisibility()` + `displayedProjectIds()` in `filters.ts`) and of template projects. The Project view's filters don't affect it. Page header: **Move old logs** on the left; **Show weekends** and **This week** on the right.
+
 ### Templates Page
 
-At `/templates`, via the **Templates** tab. Behaves like the homepage — same project cards (links above the logs table, fold all, ＋ Sub-project / ＋ Link / + log buttons, editors), "+ New Template" button — **except there are no filters** (no filter drawer/funnel icon, no project lookup, no log type filter; closed template content is always visible). Only **template projects** (`is_template = 1`) are shown here, and they appear nowhere else in the app.
+At `/templates`, via the **Templates** tab. Behaves like the Project view — same project cards (links above the logs table, fold all, ＋ Sub-project / ＋ Link / + log buttons, editors), "+ New Template" button — **except there are no filters** (no filter drawer/funnel icon, no project lookup, no log type filter; closed template content is always visible). Only **template projects** (`is_template = 1`) are shown here, and they appear nowhere else in the app.
 
 **Cloning**: top-level template cards have an accent **⧉ Clone** button. It opens a small dialog asking for the new project's title (pre-filled with the template's title). Confirming deep-copies the entire tree — logs, links, sub-projects, and their logs/links recursively (`clone_project` command → `project_repo::clone_tree`). The copy:
-- is a **regular project** (never a template) that appears on the homepage;
+- is a **regular project** (never a template) that appears in the Project view;
 - is **fully independent** — later edits to the template never affect projects cloned from it, and vice versa;
-- after cloning, the app navigates to the homepage with all filters cleared and the project filter set to the new project (handed off via the `pendingProjectFocus` store).
+- after cloning, the app navigates to the Project view (`/projects`) with all filters cleared and the project filter set to the new project (handed off via the `pendingProjectFocus` store).
 
 **Date re-anchoring on clone** (template dates are typically in the past):
 - **Log due dates** shift as a group: the earliest due date anywhere in the template tree lands on **today**, all others keep their relative distance (e.g. today 04/07: logs due 01/06, 04/06, 07/06 become 04/07, 07/07, 10/07). Logs without a due date stay empty.
@@ -352,14 +349,14 @@ At `/templates`, via the **Templates** tab. Behaves like the homepage — same p
 Fields, in layout order:
 - Row 1 — **Title** (required) / **Log Type** (required)
 - Row 2 — **Due Date** (required) / **Status** (open/closed toggle). Due Date has **quick-date badges** below the picker: `Today · +1 · +2 · +3 · Fri. · Next Mon. · Next Fri.` — one click fills the date field (nothing saved until Save/Create). `+N` = today + N days; `Fri.` = the upcoming Friday (in 7 days if today is Friday); `Next Mon./Fri.` = Monday/Friday of the week starting next Monday. Tooltips show the resolved date. On click the date input flashes accent-colored for 300ms as feedback. Dates are computed in local time (not UTC) to avoid day-shift near midnight.
+- Row 3 — **Project** (dropdown, full width — required; directly below Due Date / Status since 1.0.0, it used to be the last field)
 - **Categories** — 2×2 grid of badge toggles, one group per category; multiple values selectable per category; values sorted alphabetically; **"+ Add" button in each group** to create new category values on the fly (auto-selected after creation, race-condition safe via `pendingAdd` promise tracking; a failed creation is caught so it can't break Save)
 - **Open Points** (rich text — see Rich Text Editor section; the log's main description, DB column `description`)
 - **Closed Points** (rich text; DB column `closed_description`) — notes on resolved/done items, hidden by default in the views (see below)
-- **Project** (dropdown — required; last because it's usually preselected from context)
 
 Validation: **Title, Log Type, Due Date and Project are mandatory** — empty mandatory inputs get a red border, and Save/Create stays disabled until all are filled. Due Date is enforced UI-side only: legacy logs without one keep their NULL until edited, at which point a date must be set.
 
-**Closed Points in the views** (project card log tables and Table view): when a log has Closed Points content, a thin separator line and an italic "**See more…**" link render below the open points. Clicking it expands the closed points inline (indented, left-bordered) and turns into "See less"; clicking doesn't open the Log Editor. Closed points are collapsed by default and all expanded while a log search is active (see the log search); there is no global expand toggle (the "Closed points" header button was removed in 0.4.14). Empty-but-saved rich text (e.g. `<p><br></p>`) is not treated as content (`hasRichText()` in `types.ts`).
+**Closed Points in the views** (project card log tables): when a log has Closed Points content, a thin separator line and an italic "**See more…**" link render below the open points. Clicking it expands the closed points inline (indented, left-bordered) and turns into "See less"; clicking doesn't open the Log Editor. Closed points are collapsed by default and all expanded while a log search is active (see the log search); there is no global expand toggle (the "Closed points" header button was removed in 0.4.14). Empty-but-saved rich text (e.g. `<p><br></p>`) is not treated as content (`hasRichText()` in `types.ts`).
 
 ### Project Editor (slide-in panel, 480px wide)
 
@@ -372,7 +369,7 @@ Fields:
 
 ### Rich Text Editor
 
-**Link color**: links inside rich text (log open/closed points in the Project and Table views, and inside the editor) use a theme token `--link` defined in `+layout.svelte` — blue `#2563eb` in light mode, light blue `#60a5fa` in dark mode (the browser default dark blue was unreadable on the dark background). Applied with `!important` so links pasted with an inline color (e.g. Outlook's dark blue) follow the theme too.
+**Link color**: links inside rich text (log open/closed points in the Project view, and inside the editor) use a theme token `--link` defined in `+layout.svelte` — blue `#2563eb` in light mode, light blue `#60a5fa` in dark mode (the browser default dark blue was unreadable on the dark background). Applied with `!important` so links pasted with an inline color (e.g. Outlook's dark blue) follow the theme too.
 
 Built on `contenteditable` with `document.execCommand`. Toolbar:
 - **B** / *I* toggle buttons (highlights when active)
@@ -388,7 +385,7 @@ Additional behaviors:
 - **Pasting a bare URL** (`https://...`) automatically converts it to a clickable `<a>` link
 - **Clicking a link** (Ctrl/Cmd+click in the editor, or click in the log card description) opens it in the system default browser via `opener:allow-default-urls`
 - **Tab** inside a list item indents it (creates a nested sub-list); **Shift+Tab** outdents it. This also works inside a table cell — when the caret is in a list within the cell, list indentation takes priority. Otherwise, inside a table, **Tab/Shift+Tab** move to the next/previous cell, and Tab in the last cell appends a new row. Outside both, Tab inserts 4 spaces.
-- Tables are stored as plain `<table>/<tr>/<th>/<td>` HTML (allowed by the DOMPurify sanitizer along with `colspan`/`rowspan`) and rendered with themed borders in the editor, project cards, log cards and table view.
+- Tables are stored as plain `<table>/<tr>/<th>/<td>` HTML (allowed by the DOMPurify sanitizer along with `colspan`/`rowspan`) and rendered with themed borders in the editor, project cards and log cards.
 
 ### Links
 

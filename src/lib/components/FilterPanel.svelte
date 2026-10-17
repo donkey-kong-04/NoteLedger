@@ -2,7 +2,7 @@
   import { get } from 'svelte/store';
   import { onDestroy, tick } from 'svelte';
   import CategoryFilter from './CategoryFilter.svelte';
-  import { picklists, projects, settings, saveSettings, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen, searchQuery } from '../store';
+  import { picklists, projects, settings, saveSettings, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen, searchQuery, clearFilters } from '../store';
   import { sortedProjectOptions, CAT_COLORS } from '../types';
   import type { PicklistValue } from '../types';
 
@@ -74,12 +74,7 @@
     lookupInput?.focus();
   }
 
-  function clearAll() {
-    $selCat1 = []; $selCat2 = []; $selCat3 = []; $selCat4 = [];
-    $selProject = null;
-    $selLogType = null;
-    $searchQuery = '';
-  }
+  const clearAll = clearFilters;
 
   // ── Active filter chips (always visible in the bar, each dismissible) ────
   type Chip = { key: string; label: string; color?: { hex: string; rgb: string }; clear: () => void };

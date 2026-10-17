@@ -1,5 +1,6 @@
 import { writable, derived } from 'svelte/store';
-import { parseSearchTokens } from './search';
+import { parseSearchTokens, logMatchesSearch } from './search';
+import { logMatchesSlot, computeVisibility } from './filters';
 import { invoke } from '@tauri-apps/api/core';
 import type { UserSettings, PicklistValue, Log, Project, ProjectLink } from './types';
 
@@ -17,12 +18,13 @@ export const projects = writable<Project[]>([]);
 export const logs = writable<Log[]>([]);
 export const projectLinks = writable<ProjectLink[]>([]);
 
-// Set before navigating to the homepage to have it clear its filters and
-// focus the project filter on this project (used after cloning a template).
+// Set before navigating to the Project view to have it clear its filters and
+// focus the project filter on this project (used after cloning a template and
+// by clicking a project name in the Calendar view).
 export const pendingProjectFocus = writable<number | null>(null);
 
-// Filter state, shared between the Home and Table views so switching pages
-// keeps the same filters applied.
+// Project view filter state; kept in stores so navigating to another page and
+// back keeps the same filters applied. (The Calendar view has no filters.)
 export const selCat1 = writable<number[]>([]);
 export const selCat2 = writable<number[]>([]);
 export const selCat3 = writable<number[]>([]);
@@ -43,6 +45,49 @@ export const filtersActive = derived(
   ([c1, c2, c3, c4, p, t, s]) =>
     c1.length + c2.length + c3.length + c4.length > 0 || p !== null || t !== null || s
 );
+
+// ── Filtered Project view ───────────────────────────────────────────────────
+// Matching/visibility helpers live in ./filters (pure + unit-tested).
+
+// Template projects (and their logs) only appear on the Templates page.
+export const liveProjects = derived(projects, ps => ps.filter(p => !p.is_template));
+
+// True when no filter that narrows the visible logs is active — projects with
+// no matching logs are then still shown.
+export const noLogFilter = derived(
+  [selCat1, selCat2, selCat3, selCat4, selLogType, searchTokens],
+  ([c1, c2, c3, c4, t, s]) =>
+    !c1.length && !c2.length && !c3.length && !c4.length && t === null && s.length === 0
+);
+
+// Logs passing the log filters (AND logic): log type, categories (inherited
+// from ancestor projects) and the log search.
+export const matchingLogs = derived(
+  [logs, liveProjects, selCat1, selCat2, selCat3, selCat4, selLogType, searchTokens],
+  ([ls, ps, c1, c2, c3, c4, t, s]) => ls.filter(l =>
+    (t === null || l.type_id === t) &&
+    logMatchesSlot(l, 1, c1, ps) &&
+    logMatchesSlot(l, 2, c2, ps) &&
+    logMatchesSlot(l, 3, c3, ps) &&
+    logMatchesSlot(l, 4, c4, ps) &&
+    logMatchesSearch(l, s)
+  )
+);
+
+// Which projects show (and which only as ancestor context), given the project
+// filter and the matching logs.
+export const projectVisibility = derived(
+  [liveProjects, matchingLogs, selProject, filtersActive, noLogFilter],
+  ([ps, ls, sel, active, noLog]) => computeVisibility(ps, ls, sel, active, noLog)
+);
+
+// Resets every filter (the "Clear all" button, revealing new items).
+export function clearFilters() {
+  selCat1.set([]); selCat2.set([]); selCat3.set([]); selCat4.set([]);
+  selProject.set(null);
+  selLogType.set(null);
+  searchQuery.set('');
+}
 
 // Whether the filter drawer is open; lives here so the app shell in
 // +layout.svelte can shift the page content aside instead of being overlaid.
@@ -151,6 +196,25 @@ export async function updateLog(log: Log) {
   await invoke<Log>('update_log', { log });
   const fresh = await invoke<Log[]>('get_logs');
   logs.set(fresh);
+}
+
+// Calendar rescheduling (drag & drop, "move old logs"): changes only the due
+// dates. Optimistic, so logs land on their new day at once; the reload then
+// confirms (or puts back whatever failed to save).
+export async function moveLogsDueDates(moves: { log: Log; dueDate: string }[]) {
+  const byId = new Map(moves.map(m => [m.log.id, m.dueDate]));
+  logs.update(ls => ls.map(l => (byId.has(l.id) ? { ...l, due_date: byId.get(l.id)! } : l)));
+  try {
+    for (const { log, dueDate } of moves) {
+      await invoke<Log>('update_log', { log: { ...log, due_date: dueDate } });
+    }
+  } finally {
+    logs.set(await invoke<Log[]>('get_logs'));
+  }
+}
+
+export function moveLogDueDate(log: Log, dueDate: string) {
+  return moveLogsDueDates([{ log, dueDate }]);
 }
 
 export async function deleteLog(id: number) {

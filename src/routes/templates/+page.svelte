@@ -97,9 +97,9 @@
     try {
       const newId = await cloneProject(cloneSource.id, cloneTitle.trim());
       closeCloneDialog();
-      // Land on the homepage focused on the freshly created project.
+      // Land on the Project view focused on the freshly created project.
       pendingProjectFocus.set(newId);
-      await goto('/');
+      await goto('/projects');
     } catch (e: any) {
       cloneError = String(e);
     } finally {

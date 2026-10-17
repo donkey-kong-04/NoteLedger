@@ -3,8 +3,8 @@
 
   // Central list of app views — add new pages here and they appear in every top bar.
   const tabs = [
-    { label: 'Project view', href: '/' },
-    { label: 'Table view', href: '/table' },
+    { label: 'Calendar view', href: '/' },
+    { label: 'Project view', href: '/projects' },
     { label: 'Templates', href: '/templates' },
     { label: 'Settings', href: '/settings' },
   ];

@@ -102,3 +102,17 @@ export function computeVisibility(
 
   return { visible, ancestorOnly };
 }
+
+/**
+ * Projects whose logs the Project view actually renders: visible, not
+ * context-only, and reachable — the tree renders top-down, so a hidden
+ * ancestor hides its whole subtree.
+ */
+export function displayedProjectIds(projects: Project[], vis: Visibility): Set<number> {
+  const shown = new Set<number>();
+  for (const p of projects) {
+    if (vis.ancestorOnly.has(p.id)) continue;
+    if ([...getAncestorIds(projects, p.id)].every((id) => vis.visible.has(id))) shown.add(p.id);
+  }
+  return shown;
+}

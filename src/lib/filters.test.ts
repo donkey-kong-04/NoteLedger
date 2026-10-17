@@ -5,6 +5,7 @@ import {
   ancestorCatIds,
   logMatchesSlot,
   computeVisibility,
+  displayedProjectIds,
 } from './filters';
 import type { Log, Project } from './types';
 
@@ -116,5 +117,19 @@ describe('computeVisibility', () => {
     const { visible } = computeVisibility(tree, logs, null, false, false);
     expect(visible.has(1)).toBe(true); // subtree contains the log
     expect(visible.has(4)).toBe(false); // empty branch hidden
+  });
+});
+
+describe('displayedProjectIds', () => {
+  it('excludes context-only projects', () => {
+    const vis = computeVisibility(tree, [], 3, true, true);
+    expect([...displayedProjectIds(tree, vis)]).toEqual([3]);
+  });
+
+  it('excludes projects under a hidden (closed) ancestor', () => {
+    const projects = [project(1, null, { is_closed: true }), project(2, 1)];
+    const vis = computeVisibility(projects, [], null, false, true);
+    expect(vis.visible.has(2)).toBe(true);
+    expect(displayedProjectIds(projects, vis).size).toBe(0);
   });
 });

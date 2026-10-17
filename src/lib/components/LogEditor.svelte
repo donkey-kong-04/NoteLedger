@@ -207,6 +207,21 @@ if (isNew) {
       </div>
     </div>
 
+    <div class="field">
+      <label>Project <span class="req">*</span></label>
+      <select
+        value={String(draft.project_id)}
+        class:invalid={!draft.project_id}
+        on:change={e => {
+          draft = { ...draft, project_id: Number((e.target as HTMLSelectElement).value) };
+        }}
+      >
+        {#each sortedProjectOptions(allProjects) as p}
+          <option value={String(p.id)}>{p.label}</option>
+        {/each}
+      </select>
+    </div>
+
     <div class="section-title">Categories</div>
 
     <div class="cats-grid">
@@ -261,20 +276,6 @@ if (isNew) {
       <RichTextEditor bind:value={draft.closed_description} />
     </div>
 
-    <div class="field">
-      <label>Project <span class="req">*</span></label>
-      <select
-        value={String(draft.project_id)}
-        class:invalid={!draft.project_id}
-        on:change={e => {
-          draft = { ...draft, project_id: Number((e.target as HTMLSelectElement).value) };
-        }}
-      >
-        {#each sortedProjectOptions(allProjects) as p}
-          <option value={String(p.id)}>{p.label}</option>
-        {/each}
-      </select>
-    </div>
   </div>
 
   <div class="panel-footer">
