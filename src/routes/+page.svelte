@@ -334,10 +334,11 @@
   function openEdit(log: Log) { editorLog = log; showEditor = true; }
   function closeEditor() { showEditor = false; editorLog = null; }
 
-  // Clicking a weekday (outside its logs) creates a log due that day.
+  // Clicking a weekday (outside its logs) creates a log due that day. No
+  // project is preselected (0): the editor asks for one before Create.
   // Weekends are read-only: no creation there.
   function openNewLog(key: string) {
-    editorLog = { due_date: key, type_id: logTypes[0]?.id ?? 0, project_id: $liveProjects[0]?.id ?? 0 } as Log;
+    editorLog = { due_date: key, type_id: logTypes[0]?.id ?? 0, project_id: 0 } as Log;
     showEditor = true;
   }
 

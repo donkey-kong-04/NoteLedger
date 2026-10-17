@@ -216,6 +216,11 @@ if (isNew) {
           draft = { ...draft, project_id: Number((e.target as HTMLSelectElement).value) };
         }}
       >
+        <!-- No project yet (e.g. created from a calendar day): an explicit prompt
+             rather than silently showing the first project. -->
+        {#if !draft.project_id}
+          <option value="0" disabled>Select a project…</option>
+        {/if}
         {#each sortedProjectOptions(allProjects) as p}
           <option value={String(p.id)}>{p.label}</option>
         {/each}
