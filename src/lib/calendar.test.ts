@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dateKey, parseDateKey, isWeekend, addDays, mondayOf, sameWeekdayInWeekOf, monthWeeks, shownWeeks, groupByDate, monthIndexOf, monthIndexOfKey, fromMonthIndex } from './calendar';
+import { dateKey, parseDateKey, isWeekend, addDays, mondayOf, sameWeekdayInWeekOf, addWeeks, monthWeeks, shownWeeks, groupByDate, monthIndexOf, monthIndexOfKey, fromMonthIndex } from './calendar';
 
 describe('dateKey', () => {
   it('formats local dates as YYYY-MM-DD', () => {
@@ -93,6 +93,19 @@ describe('sameWeekdayInWeekOf', () => {
   it('works across year boundaries', () => {
     expect(sameWeekdayInWeekOf('2025-12-31', today)).toBe('2026-10-14'); // a Wednesday
     expect(sameWeekdayInWeekOf('2026-12-29', new Date(2027, 0, 1))).toBe('2026-12-29'); // same week
+  });
+});
+
+describe('addWeeks', () => {
+  it('keeps the weekday, across month and year boundaries', () => {
+    expect(addWeeks('2026-10-20', 1)).toBe('2026-10-27'); // Tuesday → next Tuesday
+    expect(addWeeks('2026-10-20', 2)).toBe('2026-11-03');
+    expect(addWeeks('2026-12-25', 1)).toBe('2027-01-01');
+    expect(addWeeks('2026-10-24', 2)).toBe('2026-11-07'); // Saturday stays Saturday
+  });
+
+  it('is DST-safe (Europe: clocks go back on Oct 25, 2026)', () => {
+    expect(addWeeks('2026-10-22', 1)).toBe('2026-10-29');
   });
 });
 

@@ -31,6 +31,11 @@ export function sameWeekdayInWeekOf(key: string, today: Date): string {
   return dateKey(addDays(mondayOf(today), weekday));
 }
 
+/** The key `weeks` weeks after `key` — same weekday (negative goes back). */
+export function addWeeks(key: string, weeks: number): string {
+  return dateKey(addDays(parseDateKey(key), 7 * weeks));
+}
+
 /** Monday–Sunday dates of every week that touches the month (month is 0-based). */
 export function monthWeeks(year: number, month: number): Date[][] {
   const last = new Date(year, month + 1, 0);

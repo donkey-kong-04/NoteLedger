@@ -6,7 +6,7 @@
   import type { Log, Project, PicklistValue } from '$lib/types';
   import { computeVisibility, displayedProjectIds } from '$lib/filters';
   import { densityStyle } from '$lib/density';
-  import { dateKey, parseDateKey, isWeekend, addDays, mondayOf, sameWeekdayInWeekOf, monthWeeks, shownWeeks, groupByDate, monthIndexOf, monthIndexOfKey, fromMonthIndex } from '$lib/calendar';
+  import { dateKey, parseDateKey, isWeekend, addDays, mondayOf, sameWeekdayInWeekOf, addWeeks, monthWeeks, shownWeeks, groupByDate, monthIndexOf, monthIndexOfKey, fromMonthIndex } from '$lib/calendar';
 
   $: isDark = $settings.dark_mode;
   $: pageDensityStyle = densityStyle($settings.density);
@@ -89,6 +89,7 @@
   // The current week (Monday–Sunday) is highlighted across the grid.
   const weekStartKey = dateKey(mondayOf(now));
   const weekEndKey = dateKey(addDays(mondayOf(now), 6));
+  const weekFridayKey = dateKey(addDays(mondayOf(now), 4));
   const currentIndex = monthIndexOf(now);
 
   $: openDueKeys = new Set(calendarLogs.map(l => l.due_date ?? ''));
@@ -258,6 +259,10 @@
   }
 
   function onWindowKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape' && chipMenu) {
+      chipMenu = null;
+      return;
+    }
     if (e.key === 'Escape' && moveSource) {
       closeMoveDialog();
       return;
@@ -273,6 +278,39 @@
     if (!suppressClick) openEdit(log);
   }
 
+  // ── Log right-click menu ──────────────────────────────────────────────────
+  // Moves a log 1 or 2 weeks after its due date (same weekday). A transparent
+  // layer under the menu catches the dismissing click, so it doesn't also
+  // open the editor or create a log.
+  const WEEK_MOVES = [
+    { weeks: 1, label: 'Move to next week' },
+    { weeks: 2, label: 'Move in 2 weeks' },
+  ];
+  let chipMenu: { log: Log; x: number; y: number } | null = null;
+  let chipMenuEl: HTMLDivElement;
+
+  async function openChipMenu(e: MouseEvent, log: Log) {
+    if (drag?.active) return;
+    chipMenu = { log, x: e.clientX, y: e.clientY };
+    await tick();
+    if (!chipMenu || !chipMenuEl) return;
+    // Near the window's right/bottom edge, shift it back inside.
+    const r = chipMenuEl.getBoundingClientRect();
+    chipMenu = {
+      ...chipMenu,
+      x: Math.max(4, Math.min(chipMenu.x, window.innerWidth - r.width - 4)),
+      y: Math.max(4, Math.min(chipMenu.y, window.innerHeight - r.height - 4)),
+    };
+    chipMenuEl.querySelector('button')?.focus();
+  }
+
+  function moveByWeeks(weeks: number) {
+    if (!chipMenu) return;
+    const { log } = chipMenu;
+    chipMenu = null;
+    moveLogDueDate(log, addWeeks(log.due_date ?? '', weeks)).catch(err => console.error('moveLogDueDate failed:', err));
+  }
+
   onDestroy(() => {
     cancelAnimationFrame(scrollRaf);
     clearTimeout(flashTimer);
@@ -281,10 +319,18 @@
   // ── Move old logs ─────────────────────────────────────────────────────────
   // "Old" = the open logs the calendar shows that are due before the current
   // week (any past week). Each moves to the same weekday this week (a Tuesday
-  // stays a Tuesday), after a confirmation dialog listing every move.
-  $: oldLogs = calendarLogs
-    .filter(l => (l.due_date ?? '') < weekStartKey)
-    .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? '') || a.title.localeCompare(b.title));
+  // stays a Tuesday), after a confirmation dialog listing every move. Open
+  // logs without a due date (same projects, so never on the grid) come along
+  // too and land on Friday this week, listed after the dated ones.
+  $: undatedLogs = $logs
+    .filter(l => !l.is_closed && !l.due_date && shownProjectIds.has(Number(l.project_id)))
+    .sort((a, b) => a.title.localeCompare(b.title));
+  $: oldLogs = [
+    ...calendarLogs
+      .filter(l => (l.due_date ?? '') < weekStartKey)
+      .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? '') || a.title.localeCompare(b.title)),
+    ...undatedLogs,
+  ];
 
   let moveSource: Log[] | null = null; // the confirmation is open while set
   let moving = false;
@@ -293,7 +339,7 @@
 
   $: moves = (moveSource ?? []).map(log => {
     const from = log.due_date ?? '';
-    return { log, from, to: sameWeekdayInWeekOf(from, now) };
+    return { log, from, to: from ? sameWeekdayInWeekOf(from, now) : weekFridayKey };
   });
   // Moved to a weekday this week that has already passed: still overdue.
   $: stillOverdue = moves.filter(m => m.to < todayKey).length;
@@ -366,11 +412,11 @@
 <div class="page" class:dark={isDark} class:dragging={drag?.active && !drag.cancelled} style={pageDensityStyle}>
   <header class="page-header">
     <div class="header-left">
-      <!-- Only offered while past weeks still hold open logs. -->
+      <!-- Only offered while past weeks still hold open logs, or open logs have no due date. -->
       {#if oldLogs.length > 0}
         <button
           class="btn-secondary-sm move-old-btn" on:click={openMoveDialog}
-          title="Move the open logs due before this week (before {fmtDay(weekStartKey)}) to the same weekday this week"
+          title="Move the open logs due before this week (before {fmtDay(weekStartKey)}) to the same weekday this week, and the open logs without a due date to Friday this week"
         >
           Move old logs
           <span class="count-pill">{oldLogs.length}</span>
@@ -438,8 +484,9 @@
                         <button
                           class="chip-title"
                           class:dragging={group.logs.length > 1 && log.id === draggingId}
-                          title="{log.title}&#10;Click to edit · drag to reschedule"
+                          title="{log.title}&#10;Click to edit · drag to reschedule · right-click to move by weeks"
                           on:pointerdown={e => onChipPointerDown(e, log)}
+                          on:contextmenu|preventDefault|stopPropagation={e => openChipMenu(e, log)}
                           on:click|stopPropagation={() => onChipClick(log)}
                         >{log.title}</button>
                       {/each}
@@ -466,19 +513,36 @@
     </div>
   {/if}
 
+  {#if chipMenu}
+    <div
+      class="menu-layer" role="presentation"
+      on:pointerdown={() => chipMenu = null}
+      on:contextmenu|preventDefault={() => chipMenu = null}
+      on:wheel={() => chipMenu = null}
+    ></div>
+    <div class="chip-menu" role="menu" bind:this={chipMenuEl} style="left: {chipMenu.x}px; top: {chipMenu.y}px;">
+      {#each WEEK_MOVES as mv}
+        <button role="menuitem" on:click={() => moveByWeeks(mv.weeks)}>
+          {mv.label}
+          <span class="menu-date">{fmtDay(addWeeks(chipMenu.log.due_date ?? '', mv.weeks))}</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
+
   {#if moveSource}
     <div class="backdrop" on:click={closeMoveDialog} role="presentation"></div>
     <div class="move-dialog" role="dialog" aria-modal="true" aria-labelledby="move-dialog-title">
       <h2 id="move-dialog-title">Move old logs to this week?</h2>
       <p class="dialog-hint">
-        Are you sure? {moves.length === 1 ? 'This open log is' : `These ${moves.length} open logs are`} due before
-        this week (before {fmtDay(weekStartKey)}) and will move to the same weekday this week.
+        Are you sure? Open logs due before this week (before {fmtDay(weekStartKey)}) will move to the same
+        weekday this week; open logs without a due date will move to Friday this week ({fmtDay(weekFridayKey)}).
       </p>
       <ul class="move-list">
         {#each moves as mv (mv.log.id)}
           <li>
             <span class="move-title">{mv.log.title}</span>
-            <span class="move-dates" class:overdue={mv.to < todayKey}>{fmtDay(mv.from)} → {fmtDay(mv.to)}</span>
+            <span class="move-dates" class:overdue={mv.to < todayKey}>{mv.from ? fmtDay(mv.from) : 'No date'} → {fmtDay(mv.to)}</span>
           </li>
         {/each}
       </ul>
@@ -563,6 +627,28 @@
     border-radius: 999px;
     font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
   }
+
+  /* Log right-click menu. */
+  .menu-layer { position: fixed; inset: 0; z-index: 200; }
+  .chip-menu {
+    position: fixed; z-index: 201;
+    min-width: 220px;
+    display: flex; flex-direction: column;
+    padding: 4px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+  }
+  .chip-menu button {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
+    padding: 6px 10px;
+    background: none; border: none; border-radius: 5px;
+    font-family: inherit; font-size: 13px; color: var(--text);
+    text-align: left; cursor: pointer;
+  }
+  .chip-menu button:hover, .chip-menu button:focus-visible { background: var(--surface-2); outline: none; }
+  .menu-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
 
   /* Confirmation dialog — same look as the Templates clone dialog. */
   .backdrop {

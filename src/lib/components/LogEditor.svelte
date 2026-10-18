@@ -5,6 +5,7 @@
   import type { Log, PicklistValue, Project } from '../types';
   import { CAT_COLORS, sortedProjectOptions } from '../types';
   import { createLog, updateLog, deleteLog, createPicklistValue, picklists } from '../store';
+  import { addWeeks } from '../calendar';
 
   export let log: Log | null = null;
   export let logTypes: PicklistValue[];
@@ -71,14 +72,15 @@
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => dateFlash = false, 300);
   }
+  // +1/+2 wk count from the log's saved due date (same weekday), or from
+  // today when it has none — so they don't add up when clicked twice.
+  const weekBase = draft.due_date || plusDays(0);
+  const weekBaseLabel = draft.due_date ? 'the current due date' : 'today';
   const QUICK_DATES = [
-    { label: 'Today',   title: 'Today',            value: plusDays(0) },
-    { label: '+1',      title: 'Tomorrow',         value: plusDays(1) },
-    { label: '+2',      title: 'In 2 days',        value: plusDays(2) },
-    { label: '+3',      title: 'In 3 days',        value: plusDays(3) },
-    { label: 'Fri.',      title: 'This Friday',      value: plusDays(daysUntilNext(5)) },
-    { label: 'Next Mon.', title: 'Next week Monday', value: plusDays(nextMonday) },
+    { label: 'Today',     title: 'Today',            value: plusDays(0) },
     { label: 'Next Fri.', title: 'Next week Friday', value: plusDays(nextMonday + 4) },
+    { label: '+1 wk',     title: `1 week after ${weekBaseLabel}`,  value: addWeeks(weekBase, 1) },
+    { label: '+2 wk',     title: `2 weeks after ${weekBaseLabel}`, value: addWeeks(weekBase, 2) },
   ];
 
   function toggleCat(slot: 1|2|3|4, id: number) {
