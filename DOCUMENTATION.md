@@ -176,9 +176,9 @@ All spacing in the menu bar, main grid, log/project cards, settings page, and lo
 
 All filters live in a single component, `FilterPanel.svelte`, used by the Project view (the Calendar view has no filters). It renders these things:
 
-1. **Funnel icon button** (left side of the page header). Clicking toggles the drawer. When any filter is active, the icon is accent-colored and carries a **count badge** with the number of active filters.
-2. **Quick-search (magnifier) icon button**, right of the funnel. One click opens the drawer, focuses the **project lookup** input and opens its dropdown, so you can type a project name immediately. Like focusing the lookup manually, it clears the current project filter to start a fresh search.
-3. **Log search input** ("Search logs…", 240px), right of the icons, **always visible** — not part of the drawer. Searches each log's **title**, **Open Points** and **Closed Points** (rich text is searched as displayed text, not HTML). Logic lives in `src/lib/search.ts` (unit-tested in `search.test.ts`):
+1. **Funnel icon button** (left side of the page header). Clicking toggles the drawer. When any drawer filter is active (log type, category values), the icon is accent-colored and carries a **count badge** with their number. The project filter is not counted — it shows in its own lookup (next item).
+2. **Project lookup** ("Search project…", 240px, folder icon), right of the funnel, **always visible** — not part of the drawer (it replaced the old quick-search magnifier button in 1.0.2). Same look as the log search; while a project is selected, its title shows in the input (accent border) with an **×** to clear it. See [Project Lookup](#project-lookup).
+3. **Log search input** ("Search logs…", 240px), right of the project lookup, **always visible** — not part of the drawer. Searches each log's **title**, **Open Points** and **Closed Points** (rich text is searched as displayed text, not HTML). Logic lives in `src/lib/search.ts` (unit-tested in `search.test.ts`):
    - The query is split on whitespace into **tokens**; each token matches **case-insensitively as a substring** — `abc ghi` matches "abc def ghi" and also "abcdefghi". Duplicate tokens are ignored; regex characters are literal.
    - **AND logic at the log level**: a log is shown only if **every** token is found, but each token may sit in **any** of the three fields (one in the title, another in the open points, another in the closed points is a match). A single token never matches across two fields.
    - It combines with all other filters (AND). In the Project view, projects with no matching logs are hidden while a search is active (like a category filter).
@@ -186,10 +186,9 @@ All filters live in a single component, `FilterPanel.svelte`, used by the Projec
    - **Highlighting**: every occurrence of every token is wrapped in a yellow `<mark class="search-hit">` (global style in `+layout.svelte`, same yellow + dark text in both themes) — in log titles and inside the open/closed points rich text. Overlapping tokens merge into one highlight; a match spanning formatting (e.g. a half-bold word) is still highlighted. Highlighting is done after sanitizing, with DOM APIs (no markup injected). Not applied on the Templates page.
    - **Closed points auto-expand**: while a search is active, every log's Closed Points are shown, whether or not a token matched there; per-log See more/less choices are reset when the search starts and ends. Clearing the search collapses them again; See less still works during a search.
    - **×** button inside the input (or **Escape**) clears the search. The search is cleared by **Clear all**, and cleared when a newly created project/log is focused.
-4. **✕ Clear all button** (red outline), right of the icons, visible **only while at least one filter is active**. Clears every filter at once: project, log type, all category selections and the log search. (This used to live in the drawer header; it is now always reachable without opening the drawer.)
-5. **Active-filter chips**, shown next to the buttons at all times (even with the drawer closed) so active filters are never hidden state. One chip per active filter — selected project, log type, and each selected category value (tinted with its category color). Each chip has an **×** that clears just that filter.
+4. **✕ Clear all button** (red outline), right of the log search, visible **only while a project or drawer filter is active**. Clears every filter at once: project, log type, all category selections and the log search. (This used to live in the drawer header; it is now always reachable without opening the drawer.)
+5. **Active-filter chips**, shown next to the buttons at all times (even with the drawer closed) so active filters are never hidden state. One chip per active drawer filter — log type, and each selected category value (tinted with its category color). Each chip has an **×** that clears just that filter.
 6. **The drawer** itself: a non-modal panel (440px) that slides in from the left edge and **pushes the page content to the right** instead of overlaying it (the app shell gets matching left padding, animated in sync), so the main view stays fully visible and updates live as filters are toggled. Closed via the funnel icon, the ✕ button, **Escape**, or clicking anywhere outside the drawer. Open state lives in the `filterDrawerOpen` store so the layout can react; it resets when navigating to a page without filters. Header row: "Filters" title and the close button. Body sections:
-   - **Project filters** — project lookup (search input). The project filter can also be set straight from a project card via the funnel icon next to its title (see project card header row).
    - **Log filters** — the log type single-select.
    - **Category filters** — the four category filter groups in a **2×2 grid** (1/2 on the first row, 3/4 on the second). Each group's value list is capped at **3 badge rows and scrolls internally** (use the search to narrow long lists), so long lists never stretch the drawer. Category labels remain editable in place here, and the "Add or search" badge management works exactly as before.
 
@@ -203,12 +202,12 @@ There is no "Show closed" toggle (removed in 0.4.14) — closed items appear thr
 
 ### Project Lookup
 
-A search-style lookup in the drawer's **Project filters** section (replaces the old `<select>` dropdown). Behavior:
+A search-style lookup **always visible in the Project view header**, left of the log search (in the drawer's "Project filters" section until 1.0.1). The project filter can also be set straight from a project card via the funnel icon next to its title (see project card header row). Behavior:
 - **Click** the input → clears any active project filter and shows all projects in a floating dropdown, sorted A-Z with sub-projects indented (4 spaces per depth level) immediately below their parent.
 - **Type to filter** — token search, case-insensitive, order-independent (e.g. "api back" matches "Backend API"). The dropdown narrows in real time.
 - **Closed projects** are shown dimmed with a "Closed" pill so their status is immediately visible.
 - **Selecting a project** filters the main view to that project and its descendants. Pressing **Enter** selects the first option in the dropdown; **Escape** closes it without selecting.
-- To clear the project filter, click the input again, dismiss the project chip in the header, or use the drawer's **✕ Clear all** button.
+- To clear the project filter, click the input again, click the **×** inside it, or use **✕ Clear all**.
 
 Filter logic once a project is selected:
 - Shows the selected project and all its descendants.
@@ -372,7 +371,7 @@ Fields:
 
 **Link color**: links inside rich text (log open/closed points in the Project view, and inside the editor) use a theme token `--link` defined in `+layout.svelte` — blue `#2563eb` in light mode, light blue `#60a5fa` in dark mode (the browser default dark blue was unreadable on the dark background). Applied with `!important` so links pasted with an inline color (e.g. Outlook's dark blue) follow the theme too.
 
-Built on `contenteditable` with `document.execCommand`. Toolbar:
+Built on `contenteditable` with `document.execCommand`. The same toolbar appears **above and below** the text area (identical buttons, shared state — e.g. Bold highlights in both), so long notes can be formatted without scrolling back up. The bottom toolbar's table picker opens upward. Toolbar:
 - **B** / *I* toggle buttons (highlights when active)
 - **Bullet list** / **Numbered list** toggle buttons (highlight when cursor is inside a list; click again to remove)
 - Font size selector (Small / Normal / Large / Huge)

@@ -9,7 +9,8 @@
   let activeFormats = { bold: false, italic: false, ul: false, ol: false, inTable: false };
 
   const PICKER_MAX = 6;
-  let showTablePicker = false;
+  // Which toolbar's table picker is open (the editor has one above and below).
+  let tablePickerAt: 'top' | 'bottom' | null = null;
   let pickRows = 0;
   let pickCols = 0;
 
@@ -99,7 +100,7 @@
   }
 
   function insertTable(rows: number, cols: number) {
-    showTablePicker = false;
+    tablePickerAt = null;
     const headerCells = '<th><br></th>'.repeat(cols);
     const bodyRow = `<tr>${'<td><br></td>'.repeat(cols)}</tr>`;
     const html =
@@ -278,8 +279,10 @@
   }
 </script>
 
-<div class="rte">
-  <div class="toolbar">
+<!-- Same toolbar above and below the text, so long notes don't need
+     scrolling back up to format. -->
+{#snippet toolbar(pos: 'top' | 'bottom')}
+  <div class="toolbar" class:bottom={pos === 'bottom'}>
     <button
       class="tb-btn" class:active={activeFormats.bold}
       on:mousedown|preventDefault={() => exec('bold')}
@@ -333,8 +336,8 @@
 
     <div class="tb-table-wrap">
       <button
-        class="tb-btn" class:active={showTablePicker}
-        on:mousedown|preventDefault={() => { showTablePicker = !showTablePicker; pickRows = 0; pickCols = 0; }}
+        class="tb-btn" class:active={tablePickerAt === pos}
+        on:mousedown|preventDefault={() => { tablePickerAt = tablePickerAt === pos ? null : pos; pickRows = 0; pickCols = 0; }}
         title="Insert table"
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
@@ -345,7 +348,7 @@
           <line x1="9.5" y1="1" x2="9.5" y2="13"/>
         </svg>
       </button>
-      {#if showTablePicker}
+      {#if tablePickerAt === pos}
         <div class="table-picker" role="presentation" on:mousedown|preventDefault>
           <div class="picker-grid">
             {#each Array(PICKER_MAX) as _, r}
@@ -403,6 +406,10 @@
       <button class="tb-txt-btn" on:mousedown|preventDefault={removeColumn} title="Remove current column">− Col</button>
     {/if}
   </div>
+{/snippet}
+
+<div class="rte">
+  {@render toolbar('top')}
 
   <div
     class="editor"
@@ -411,7 +418,7 @@
     role="textbox"
     aria-multiline="true"
     aria-label="Description"
-    on:focus={() => showTablePicker = false}
+    on:focus={() => tablePickerAt = null}
     on:input={onInput}
     on:keyup={updateActive}
     on:mouseup={updateActive}
@@ -419,6 +426,8 @@
     on:click={handleLinkClick}
     on:paste={onPaste}
   ></div>
+
+  {@render toolbar('bottom')}
 </div>
 
 <style>
@@ -439,6 +448,10 @@
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     flex-wrap: wrap;
+  }
+  .toolbar.bottom {
+    border-bottom: none;
+    border-top: 1px solid var(--border);
   }
 
   .tb-btn {
@@ -481,6 +494,11 @@
     border-radius: 8px;
     padding: 8px;
     box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+  /* The bottom toolbar's picker opens upward, over the text. */
+  .toolbar.bottom .table-picker {
+    top: auto;
+    bottom: 30px;
   }
 
   .picker-grid {

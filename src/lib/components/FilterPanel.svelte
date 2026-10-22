@@ -1,6 +1,6 @@
 <script lang="ts">
   import { get } from 'svelte/store';
-  import { onDestroy, tick } from 'svelte';
+  import { onDestroy } from 'svelte';
   import CategoryFilter from './CategoryFilter.svelte';
   import { picklists, projects, settings, saveSettings, selCat1, selCat2, selCat3, selCat4, selProject, selLogType, filterDrawerOpen, searchQuery, clearFilters } from '../store';
   import { sortedProjectOptions, CAT_COLORS } from '../types';
@@ -32,7 +32,7 @@
   $: cat3Vals = $picklists.filter(v => v.picklist_type === 'category_3').sort(byLabel);
   $: cat4Vals = $picklists.filter(v => v.picklist_type === 'category_4').sort(byLabel);
 
-  // ── Project lookup (same behavior as the old top-bar lookup) ─────────────
+  // ── Project lookup (always visible in the bar, left of the log search) ──
   let lookupSearch = '';
   let lookupOpen = false;
   let lookupInput: HTMLInputElement;
@@ -61,22 +61,10 @@
     setTimeout(() => { lookupOpen = false; lookupSearch = ''; }, 150);
   }
 
-  // Quick search: open the drawer and put the caret straight into the
-  // project lookup (its focus handler opens the dropdown).
-  async function openSearch() {
-    $filterDrawerOpen = true;
-    await tick();
-    // Mirror the input's focus handler explicitly: focus() doesn't fire a
-    // focus event when the window itself isn't focused.
-    lookupSearch = '';
-    $selProject = null;
-    lookupOpen = true;
-    lookupInput?.focus();
-  }
-
   const clearAll = clearFilters;
 
   // ── Active filter chips (always visible in the bar, each dismissible) ────
+  // Drawer filters only: the selected project already shows in the lookup.
   type Chip = { key: string; label: string; color?: { hex: string; rgb: string }; clear: () => void };
 
   $: catChipDefs = [
@@ -87,11 +75,6 @@
   ];
 
   $: chips = [
-    ...($selProject != null ? [{
-      key: 'project',
-      label: selectedProjectLabel || 'Project',
-      clear: () => selProject.set(null),
-    }] : []),
     ...($selLogType != null ? [{
       key: 'logtype',
       label: logTypes.find(t => t.id === $selLogType)?.label ?? 'Type',
@@ -106,6 +89,7 @@
   ] as Chip[];
 
   $: activeCount = chips.length;
+  $: anyFilterActive = activeCount > 0 || $selProject != null;
 
   function onWindowKeydown(e: KeyboardEvent) {
     if (e.key !== 'Escape' || !$filterDrawerOpen) return;
@@ -146,16 +130,48 @@
     {/if}
   </button>
 
-  <button
-    class="funnel-btn"
-    on:click={openSearch}
-    title="Search project" aria-label="Search project"
-  >
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-      <circle cx="7" cy="7" r="4.5"/>
-      <line x1="10.5" y1="10.5" x2="14" y2="14"/>
-    </svg>
-  </button>
+  {#if nonTemplateProjects.length > 0}
+    <div class="project-lookup" class:active={lookupOpen} class:selected={$selProject != null}>
+      <svg class="lookup-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+        <path d="M1.5 3.5a1 1 0 0 1 1-1h3.5l1.5 2h6a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z"/>
+      </svg>
+      <input
+        bind:this={lookupInput}
+        type="text"
+        placeholder={$selProject != null ? selectedProjectLabel : 'Search project…'}
+        title="Filter the view to one project and its sub-projects"
+        aria-label="Filter project"
+        autocomplete="off" autocapitalize="off" spellcheck="false"
+        bind:value={lookupSearch}
+        on:focus={() => { lookupOpen = true; lookupSearch = ''; $selProject = null; }}
+        on:blur={onLookupBlur}
+        on:keydown={e => { if (e.key === 'Enter' && filteredProjectOptions.length > 0) selectProject(filteredProjectOptions[0].id); if (e.key === 'Escape') { lookupOpen = false; lookupSearch = ''; lookupInput?.blur(); } }}
+      />
+      {#if $selProject != null}
+        <button class="lookup-clear" on:click={() => selectProject(null)} title="Clear project filter" aria-label="Clear project filter">×</button>
+      {/if}
+      {#if lookupOpen}
+        <div class="lookup-dropdown">
+          {#each filteredProjectOptions as opt}
+            {@const proj = nonTemplateProjects.find(p => p.id === opt.id)}
+            <button
+              class="lookup-option"
+              class:is-closed={proj?.is_closed}
+              on:mousedown|preventDefault={() => selectProject(opt.id)}
+            >
+              <span class="lookup-label">{opt.label}</span>
+              {#if proj?.is_closed}
+                <span class="lookup-closed-pill">Closed</span>
+              {/if}
+            </button>
+          {/each}
+          {#if filteredProjectOptions.length === 0}
+            <div class="lookup-empty">No match</div>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
 
   <div class="log-search" class:active={$searchQuery.trim() !== ''}>
     <svg class="log-search-icon" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -176,7 +192,7 @@
     {/if}
   </div>
 
-  {#if activeCount > 0}
+  {#if anyFilterActive}
     <button class="btn-clear" on:click={clearAll} title="Clear all filters">✕ Clear all</button>
   {/if}
 
@@ -198,46 +214,6 @@
     </div>
 
     <div class="drawer-body">
-      <section>
-        <div class="section-title">Project filters</div>
-        <div class="project-row">
-          {#if nonTemplateProjects.length > 0}
-            <div class="project-lookup" class:active={lookupOpen}>
-              <input
-                bind:this={lookupInput}
-                class="project-lookup-input"
-                type="text"
-                placeholder={$selProject != null ? selectedProjectLabel : 'Search project…'}
-                bind:value={lookupSearch}
-                on:focus={() => { lookupOpen = true; lookupSearch = ''; $selProject = null; }}
-                on:blur={onLookupBlur}
-                on:keydown={e => { if (e.key === 'Enter' && filteredProjectOptions.length > 0) selectProject(filteredProjectOptions[0].id); if (e.key === 'Escape') { lookupOpen = false; lookupSearch = ''; lookupInput?.blur(); } }}
-              />
-              {#if lookupOpen}
-                <div class="lookup-dropdown">
-                  {#each filteredProjectOptions as opt}
-                    {@const proj = nonTemplateProjects.find(p => p.id === opt.id)}
-                    <button
-                      class="lookup-option"
-                      class:is-closed={proj?.is_closed}
-                      on:mousedown|preventDefault={() => selectProject(opt.id)}
-                    >
-                      <span class="lookup-label">{opt.label}</span>
-                      {#if proj?.is_closed}
-                        <span class="lookup-closed-pill">Closed</span>
-                      {/if}
-                    </button>
-                  {/each}
-                  {#if filteredProjectOptions.length === 0}
-                    <div class="lookup-empty">No match</div>
-                  {/if}
-                </div>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      </section>
-
       <section>
         <div class="section-title">Log filters</div>
         {#if logTypes.length > 0}
@@ -395,8 +371,6 @@
     margin-bottom: 10px;
   }
 
-  .project-row { display: flex; align-items: center; gap: 14px; }
-
   .hint { margin: 0; font-size: 12px; color: var(--text-muted); }
 
   .cat-grid {
@@ -406,20 +380,41 @@
   }
   .cat-cell { min-width: 0; }
 
-  /* ── Controls (same look as the old top-bar versions) ── */
-  .project-lookup { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; }
-  .project-lookup-input {
+  /* Always-visible project lookup, same look as the log search. While a
+     project is selected its title shows as the placeholder, in text color. */
+  .project-lookup {
+    position: relative;
+    display: flex; align-items: center;
+    width: 240px; height: 32px; flex-shrink: 0;
+  }
+  .lookup-icon {
+    position: absolute; left: 10px;
+    color: var(--text-muted); pointer-events: none;
+  }
+  .project-lookup input {
+    width: 100%; height: 100%;
+    box-sizing: border-box;
+    padding: 0 26px 0 30px;
     background: var(--surface-2); color: var(--text);
     border: 1px solid var(--border); border-radius: 8px;
-    padding: 6px 10px; font-size: 13px; font-family: inherit;
-    outline: none; width: 100%;
-    transition: border-color 0.15s;
+    font-size: 13px; font-family: inherit;
+    outline: none; transition: border-color 0.15s;
   }
-  .project-lookup.active .project-lookup-input,
-  .project-lookup-input:focus { border-color: var(--accent); }
+  .project-lookup input:focus,
+  .project-lookup.active input,
+  .project-lookup.selected input { border-color: var(--accent); }
+  .project-lookup.selected input::placeholder { color: var(--text); font-weight: 600; }
+  .project-lookup.selected .lookup-icon { color: var(--accent); }
+  .lookup-clear {
+    position: absolute; right: 6px;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-muted); font-size: 15px; line-height: 1;
+    padding: 0 3px;
+  }
+  .lookup-clear:hover { color: var(--text); }
   .lookup-dropdown {
     position: absolute; top: calc(100% + 4px); left: 0;
-    min-width: 220px; max-height: 280px; overflow-y: auto;
+    min-width: 100%; max-height: 280px; overflow-y: auto;
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15);
     z-index: 300;
