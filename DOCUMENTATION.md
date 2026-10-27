@@ -37,7 +37,7 @@ The application is developed using:
 - **Rust:** `cd src-tauri && cargo test --lib` — in-memory SQLite tests covering migrations and repository data-integrity rules (`src-tauri/src/db/tests.rs`).
 - **Frontend:** `npm test` (vitest) — pure filter/visibility logic extracted to `src/lib/filters.ts` (`src/lib/filters.test.ts`), log search in `src/lib/search.ts` (`search.test.ts`) and Calendar view date helpers in `src/lib/calendar.ts` (`calendar.test.ts`).
 - **Type-check:** `npm run check` (svelte-check) must report 0 errors.
-- CI (`.github/workflows/build.yml`) runs all three in `frontend`/`rust` jobs that must pass before the `build` matrix job produces installer artifacts for **Windows (MSI/NSIS), macOS (DMG, Apple Silicon) and Linux (deb/AppImage, ubuntu-22.04)**.
+- CI (`.github/workflows/build.yml`) runs all three in `frontend`/`rust` jobs that must pass before the `build` matrix job produces the installer artifact: **Windows only, NSIS `.exe` only** (since 1.0.5 — `--bundles nsis`; until 1.0.4 it also built the Windows `.msi`, a macOS `.dmg` and Linux deb/AppImage). The artifact is `NoteLedger-windows-latest`. `tauri.conf.json` keeps `"targets": "all"`, so a local `npm run tauri build` still produces the platform's usual bundles (e.g. the macOS `.dmg`). To build other platforms in CI again, add entries to the `build` matrix (see the comment there).
 
 # Data Model
 
