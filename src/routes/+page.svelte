@@ -20,13 +20,14 @@
   $: cat4Vals = $picklists.filter(v => v.picklist_type === 'category_4').sort(byLabel);
 
   // ── Projects ──────────────────────────────────────────────────────────────
-  // No filters on this page: every open project, placed on its date — except
-  // closed projects (or under a closed ancestor — hidden like in the
-  // unfiltered Project view) and templates. Each project's card lists its own
-  // open logs, whatever their due date (sub-projects have their own card).
+  // No filters on this page: every open project with at least one open log of
+  // its own, placed on its date — except closed projects (or under a closed
+  // ancestor — hidden like in the unfiltered Project view) and templates.
+  // Each project's card lists its own open logs, whatever their due date
+  // (sub-projects have their own card).
   $: shownProjectIds = displayedProjectIds($liveProjects, computeVisibility($liveProjects, $logs, null, false, true));
-  $: calendarProjects = $liveProjects.filter(p => p.date && shownProjectIds.has(p.id));
   $: openLogsByProject = openLogsOf($logs);
+  $: calendarProjects = $liveProjects.filter(p => p.date && shownProjectIds.has(p.id) && openLogsByProject.has(p.id));
 
   // Each day's project cards, sorted A-Z by project path.
   type ProjectCard = { project: Project; path: string; logs: Log[] };
@@ -887,7 +888,6 @@
     font-size: 12px; font-weight: 600; line-height: 1.3;
     color: var(--text-muted);
   }
-  .card-head:last-child .card-project { padding-bottom: 5px; } /* no logs */
   .card-project:hover { color: var(--accent); text-decoration: underline; }
   .card-add {
     flex-shrink: 0;
