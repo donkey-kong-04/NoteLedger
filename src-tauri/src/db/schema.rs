@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result};
 
 /// The schema version this build migrates up to. Bump this whenever a new
 /// `if version < N` block is added below.
-pub const LATEST_VERSION: i64 = 11;
+pub const LATEST_VERSION: i64 = 12;
 
 pub fn migrate(conn: &Connection) -> Result<()> {
     let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
@@ -269,6 +269,23 @@ pub fn migrate(conn: &Connection) -> Result<()> {
         conn.execute_batch("
             ALTER TABLE logs ADD COLUMN closed_description TEXT;
             PRAGMA user_version = 11;
+        ")?;
+    }
+
+    if version < 12 {
+        // Mandatory project date: the Calendar view places projects on it.
+        // Existing projects land on their earliest open log deadline, else
+        // their start date, else today.
+        conn.execute_batch("
+            ALTER TABLE projects ADD COLUMN date TEXT NOT NULL DEFAULT '';
+            UPDATE projects SET date = COALESCE(
+                (SELECT MIN(l.due_date) FROM logs l
+                  WHERE l.project_id = projects.id AND l.is_closed = 0
+                    AND l.due_date IS NOT NULL AND l.due_date <> ''),
+                NULLIF(start_date, ''),
+                date('now', 'localtime')
+            );
+            PRAGMA user_version = 12;
         ")?;
     }
 

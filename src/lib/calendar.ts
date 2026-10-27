@@ -62,13 +62,13 @@ export function fromMonthIndex(index: number): { year: number; month: number } {
 
 /**
  * Weeks of a month block worth showing: the current week (starting on
- * `weekStart`, a Monday key) and later ones, plus past weeks with a due date
- * on one of this month's days. Empty past weeks are hidden — nothing gets
- * planned in the past.
+ * `weekStart`, a Monday key) and later ones, plus past weeks with something
+ * dated on one of this month's days. Empty past weeks are hidden — nothing
+ * gets planned in the past.
  */
-export function shownWeeks(weeks: Date[][], month: number, weekStart: string, dueKeys: Set<string>): Date[][] {
+export function shownWeeks(weeks: Date[][], month: number, weekStart: string, datedKeys: Set<string>): Date[][] {
   return weeks.filter(w =>
-    dateKey(w[0]) >= weekStart || w.some(d => d.getMonth() === month && dueKeys.has(dateKey(d))));
+    dateKey(w[0]) >= weekStart || w.some(d => d.getMonth() === month && datedKeys.has(dateKey(d))));
 }
 
 /** Groups items by a 'YYYY-MM-DD' key. */

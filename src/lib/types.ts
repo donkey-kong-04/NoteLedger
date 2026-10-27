@@ -22,6 +22,7 @@ export interface Project {
   parent_id: number | null;
   is_closed: boolean;
   is_template: boolean;
+  date: string; // mandatory 'YYYY-MM-DD' — places the project on the Calendar view
   start_date: string | null;
   end_date: string | null;
   category1_ids: number[];
@@ -156,17 +157,29 @@ export function compareLogs(a: Log, b: Log): number {
     : a.due_date.localeCompare(b.due_date);
 }
 
-export function deadlineColor(due: string): string {
+// Deadline urgency: red = due this calendar week (up to Sunday) or earlier,
+// yellow = next week, green = later.
+export type DeadlineLevel = 'red' | 'yellow' | 'green';
+
+export function deadlineLevel(due: string): DeadlineLevel {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const dueDate = new Date(due);
+  // Local midnight (new Date('YYYY-MM-DD') is UTC, which shifts the day).
+  const [y, m, d] = due.split('-').map(Number);
+  const dueDate = new Date(y, m - 1, d);
   // End of this calendar week (Sunday), or today if today is Sunday
   const endOfThisWeek = new Date(today);
   endOfThisWeek.setDate(today.getDate() + (7 - today.getDay()) % 7);
   // End of next calendar week (the Sunday after)
   const endOfNextWeek = new Date(endOfThisWeek);
   endOfNextWeek.setDate(endOfThisWeek.getDate() + 7);
-  if (dueDate <= endOfThisWeek) return '#ef4444';
-  if (dueDate <= endOfNextWeek) return '#f59e0b';
-  return '#22c55e';
+  if (dueDate <= endOfThisWeek) return 'red';
+  if (dueDate <= endOfNextWeek) return 'yellow';
+  return 'green';
+}
+
+const DEADLINE_HEX: Record<DeadlineLevel, string> = { red: '#ef4444', yellow: '#f59e0b', green: '#22c55e' };
+
+export function deadlineColor(due: string): string {
+  return DEADLINE_HEX[deadlineLevel(due)];
 }

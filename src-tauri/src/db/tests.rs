@@ -19,6 +19,7 @@ fn project(title: &str) -> Project {
         parent_id: None,
         is_closed: false,
         is_template: false,
+        date: "2026-01-01".into(),
         start_date: None,
         end_date: None,
         category1_ids: vec![],
@@ -224,14 +225,17 @@ fn clone_tree_shifts_dates_to_today() {
 
     // Template: project started 2026-05-01, ends 2026-08-01 (3 months planned).
     // Logs due 2026-06-01 (earliest, in a child), 2026-06-04, 2026-06-07.
+    // Project dates: root 2026-05-10, child a week later.
     let mut root = project("Tpl");
     root.is_template = true;
+    root.date = "2026-05-10".into();
     root.start_date = Some("2026-05-01".into());
     root.end_date = Some("2026-08-01".into());
     let root_id = project_repo::insert(&conn, &root).unwrap();
 
     let mut child = project("Child");
     child.parent_id = Some(root_id);
+    child.date = "2026-05-17".into();
     let child_id = project_repo::insert(&conn, &child).unwrap();
 
     let mut l1 = log(child_id); l1.due_date = Some("2026-06-01".into());
@@ -249,6 +253,10 @@ fn clone_tree_shifts_dates_to_today() {
     assert_eq!(new_root.end_date.as_deref(), Some("2026-10-04"));
 
     let new_child = projects.iter().find(|p| p.parent_id == Some(new_id)).unwrap();
+    // Root date → today; the child keeps its one-week distance.
+    assert_eq!(new_root.date, "2026-07-04");
+    assert_eq!(new_child.date, "2026-07-11");
+
     let logs = log_repo::list(&conn).unwrap();
     let cloned: Vec<&crate::models::log::Log> = logs.iter()
         .filter(|l| l.project_id == new_id || l.project_id == new_child.id)
@@ -265,4 +273,53 @@ fn clone_tree_shifts_dates_to_today() {
     // Template dates untouched.
     let tpl = projects.iter().find(|p| p.id == root_id).unwrap();
     assert_eq!(tpl.start_date.as_deref(), Some("2026-05-01"));
+    assert_eq!(tpl.date, "2026-05-10");
+}
+
+#[test]
+fn project_date_defaults_to_today_on_insert_and_is_required_on_update() {
+    let conn = mem();
+    let mut p = project("No date");
+    p.date = String::new();
+    let id = project_repo::insert(&conn, &p).unwrap();
+
+    let today = chrono::Local::now().date_naive().to_string();
+    let mut saved = project_repo::list(&conn).unwrap().into_iter().find(|x| x.id == id).unwrap();
+    assert_eq!(saved.date, today);
+
+    saved.date = "  ".into();
+    assert!(project_repo::update(&conn, &saved).is_err(), "a project can't lose its date");
+    saved.date = "2026-12-01".into();
+    project_repo::update(&conn, &saved).unwrap();
+    let reloaded = project_repo::list(&conn).unwrap().into_iter().find(|x| x.id == id).unwrap();
+    assert_eq!(reloaded.date, "2026-12-01");
+}
+
+#[test]
+fn migration_v12_backfills_project_dates() {
+    let conn = mem();
+    // Earliest open deadline wins (closed and undated logs are ignored).
+    let with_logs = project_repo::insert(&conn, &project("Logs")).unwrap();
+    let mut a = log(with_logs); a.due_date = Some("2026-03-10".into());
+    let mut b = log(with_logs); b.due_date = Some("2026-03-05".into());
+    let mut closed = log(with_logs); closed.due_date = Some("2026-01-01".into()); closed.is_closed = true;
+    let undated = log(with_logs);
+    for l in [&a, &b, &closed, &undated] { log_repo::insert(&conn, l).unwrap(); }
+    // No open deadline → start date.
+    let mut started = project("Started");
+    started.start_date = Some("2026-02-02".into());
+    let started_id = project_repo::insert(&conn, &started).unwrap();
+    // Neither → today.
+    let bare_id = project_repo::insert(&conn, &project("Bare")).unwrap();
+
+    // Roll the DB back to v11 (no date column) and migrate again.
+    conn.execute_batch("ALTER TABLE projects DROP COLUMN date; PRAGMA user_version = 11;").unwrap();
+    schema::migrate(&conn).unwrap();
+
+    let today = chrono::Local::now().date_naive().to_string();
+    let projects = project_repo::list(&conn).unwrap();
+    let date_of = |id: i64| projects.iter().find(|p| p.id == id).unwrap().date.clone();
+    assert_eq!(date_of(with_logs), "2026-03-05");
+    assert_eq!(date_of(started_id), "2026-02-02");
+    assert_eq!(date_of(bare_id), today);
 }

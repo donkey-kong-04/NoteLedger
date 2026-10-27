@@ -2,6 +2,7 @@
   import { settings, picklists, projects, saveSettings, createPicklistValue, updatePicklistValue, deletePicklistValue, createProject, updateProject, deleteProject } from '$lib/store';
   import { CAT_COLORS } from '$lib/types';
   import type { PicklistValue, Project, Density } from '$lib/types';
+  import { dateKey } from '$lib/calendar';
 
   // Local copies for editing
   let cat1Label = $settings.category1_label;
@@ -92,7 +93,7 @@
     try {
       await createProject({
         title: trimmed, description: '', parent_id: null,
-        is_closed: false, is_template: false, start_date: null, end_date: null,
+        is_closed: false, is_template: false, date: dateKey(new Date()), start_date: null, end_date: null,
         category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [],
       });
       projectError = '';

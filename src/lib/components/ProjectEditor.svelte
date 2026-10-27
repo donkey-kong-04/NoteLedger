@@ -4,6 +4,7 @@
   import type { Project, PicklistValue } from '../types';
   import { CAT_COLORS, sortedProjectOptions } from '../types';
   import { createProject, updateProject, deleteProject, createPicklistValue, picklists } from '../store';
+  import { dateKey } from '../calendar';
 
   export let project: Project | null = null;
   export let allProjects: Project[];
@@ -28,7 +29,7 @@
     category2_ids: [...(project.category2_ids ?? [])],
     category3_ids: [...(project.category3_ids ?? [])],
     category4_ids: [...(project.category4_ids ?? [])],
-  } : { id: 0, title: '', description: '', parent_id: null, is_closed: false, is_template: isTemplate, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
+  } : { id: 0, title: '', description: '', parent_id: null, is_closed: false, is_template: isTemplate, date: dateKey(new Date()), start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
 
   let confirmDelete = false;
   let error = '';
@@ -89,8 +90,10 @@
     addDraft[slot] = '';
   }
 
+  $: canSave = !!draft.title.trim() && !!draft.date;
+
   async function save() {
-    if (!draft.title.trim()) return;
+    if (!canSave) return;
     await pendingAdd;
     error = '';
     try {
@@ -127,9 +130,19 @@
       <p class="error">{error}</p>
     {/if}
 
-    <div class="field">
-      <label>Title <span class="req">*</span></label>
-      <input bind:value={draft.title} placeholder="Project name" />
+    <div class="field-row">
+      <div class="field" style="flex:2">
+        <label>Title <span class="req">*</span></label>
+        <input bind:value={draft.title} placeholder="Project name" />
+      </div>
+      <div class="field">
+        <label title="The day this project shows on in the Calendar view">Date <span class="req">*</span></label>
+        <input
+          type="date" required class:invalid={!draft.date}
+          value={draft.date}
+          on:change={e => draft = { ...draft, date: (e.target as HTMLInputElement).value }}
+        />
+      </div>
     </div>
 
     <div class="field">
@@ -220,7 +233,7 @@
     {/if}
     <div class="spacer"></div>
     <button class="btn-secondary" on:click={close}>Cancel</button>
-    <button class="btn-primary" on:click={save} disabled={!draft.title.trim()}>
+    <button class="btn-primary" on:click={save} disabled={!canSave}>
       {isNew ? 'Create' : 'Save'}
     </button>
   </div>
@@ -270,6 +283,7 @@
     outline: none; transition: border-color 0.15s; width: 100%; box-sizing: border-box;
   }
   input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  input.invalid { border-color: #ef4444; }
   textarea { resize: vertical; min-height: 80px; }
   .error { font-size: 13px; color: #ef4444; background: rgba(239,68,68,0.08); border-radius: 6px; padding: 8px 12px; margin: 0; }
   .toggle-row { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; font-weight: normal; text-transform: none; letter-spacing: normal; color: var(--text); width: fit-content; }

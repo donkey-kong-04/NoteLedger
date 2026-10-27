@@ -9,6 +9,7 @@
   import { settings, picklists, logs, projectLinks, loadAll, pendingProjectFocus, selProject, clearFilters, liveProjects, matchingLogs, projectVisibility } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { densityStyle as densityStyleFor } from '$lib/density';
+  import { dateKey } from '$lib/calendar';
 
 
   let editorLog: Log | null = null;
@@ -138,7 +139,7 @@
 
   function openNewSubProject(e: CustomEvent<Project>) {
     const parent = e.detail;
-    editorProject = { id: 0, title: '', description: '', parent_id: parent.id, is_closed: false, is_template: false, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
+    editorProject = { id: 0, title: '', description: '', parent_id: parent.id, is_closed: false, is_template: false, date: dateKey(new Date()), start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
     showProjectEditor = true;
   }
 </script>

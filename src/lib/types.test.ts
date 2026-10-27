@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { daysSince, openSinceLabel, compareLogs } from './types';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { daysSince, openSinceLabel, compareLogs, deadlineLevel } from './types';
 import type { Log } from './types';
 
 function isoDaysAgo(n: number): string {
@@ -58,5 +58,20 @@ describe('compareLogs', () => {
       mk(6, '2026-02-01', false),
     ];
     expect([...logs].sort(compareLogs).map(l => l.id)).toEqual([6, 2, 5, 4, 1, 3]);
+  });
+});
+
+describe('deadlineLevel', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('is red up to this Sunday, yellow next week, green later', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 27, 15, 0)); // Tue, Oct 27 2026
+    expect(deadlineLevel('2026-10-01')).toBe('red');    // overdue
+    expect(deadlineLevel('2026-10-27')).toBe('red');    // today
+    expect(deadlineLevel('2026-11-01')).toBe('red');    // this Sunday
+    expect(deadlineLevel('2026-11-02')).toBe('yellow'); // next Monday
+    expect(deadlineLevel('2026-11-08')).toBe('yellow'); // next Sunday
+    expect(deadlineLevel('2026-11-09')).toBe('green');
   });
 });

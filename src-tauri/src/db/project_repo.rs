@@ -27,7 +27,7 @@ fn save_categories(conn: &Connection, table: &str, project_id: i64, ids: &[i64])
     Ok(())
 }
 
-fn load_project(conn: &Connection, id: i64, title: String, description: String, parent_id: Option<i64>, is_closed: bool, is_template: bool, start_date: Option<String>, end_date: Option<String>) -> Result<Project> {
+fn load_project(conn: &Connection, id: i64, title: String, description: String, parent_id: Option<i64>, is_closed: bool, is_template: bool, date: String, start_date: Option<String>, end_date: Option<String>) -> Result<Project> {
     Ok(Project {
         id,
         title,
@@ -35,6 +35,7 @@ fn load_project(conn: &Connection, id: i64, title: String, description: String, 
         parent_id,
         is_closed,
         is_template,
+        date,
         start_date,
         end_date,
         category1_ids: load_category_ids(conn, "project_category_1", id)?,
@@ -46,17 +47,23 @@ fn load_project(conn: &Connection, id: i64, title: String, description: String, 
 
 pub fn list(conn: &Connection) -> Result<Vec<Project>> {
     let mut stmt = conn.prepare(
-        "SELECT id, title, description, parent_id, is_closed, is_template, start_date, end_date FROM projects ORDER BY id"
+        "SELECT id, title, description, parent_id, is_closed, is_template, date, start_date, end_date FROM projects ORDER BY id"
     )?;
-    let rows: Result<Vec<(i64, String, String, Option<i64>, bool, bool, Option<String>, Option<String>)>> = stmt.query_map([], |r| {
-        Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<String>>(2)?.unwrap_or_default(), r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?))
+    let rows: Result<Vec<(i64, String, String, Option<i64>, bool, bool, String, Option<String>, Option<String>)>> = stmt.query_map([], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get::<_, Option<String>>(2)?.unwrap_or_default(), r.get(3)?, r.get(4)?, r.get(5)?, r.get(6)?, r.get(7)?, r.get(8)?))
     })?.collect();
     rows?.into_iter()
-        .map(|(id, title, desc, parent_id, is_closed, is_template, start_date, end_date)| load_project(conn, id, title, desc, parent_id, is_closed, is_template, start_date, end_date))
+        .map(|(id, title, desc, parent_id, is_closed, is_template, date, start_date, end_date)| load_project(conn, id, title, desc, parent_id, is_closed, is_template, date, start_date, end_date))
         .collect()
 }
 
 pub fn insert(conn: &Connection, project: &Project) -> Result<i64> {
+    // The date is mandatory; a creation path that doesn't set one gets today.
+    let date = if project.date.trim().is_empty() {
+        Local::now().date_naive().to_string()
+    } else {
+        project.date.clone()
+    };
     // A sub-project always inherits its parent's template flag so a template
     // tree stays consistently marked.
     let is_template = match project.parent_id {
@@ -67,8 +74,8 @@ pub fn insert(conn: &Connection, project: &Project) -> Result<i64> {
     };
     let tx = conn.unchecked_transaction()?;
     tx.execute(
-        "INSERT INTO projects (title, description, parent_id, is_closed, is_template, start_date, end_date) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![project.title, project.description, project.parent_id, project.is_closed, is_template, project.start_date, project.end_date],
+        "INSERT INTO projects (title, description, parent_id, is_closed, is_template, date, start_date, end_date) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![project.title, project.description, project.parent_id, project.is_closed, is_template, date, project.start_date, project.end_date],
     )?;
     let id = tx.last_insert_rowid();
     for (table, ids) in CAT_TABLES.iter().zip(project_cat_ids(project)) {
@@ -79,6 +86,11 @@ pub fn insert(conn: &Connection, project: &Project) -> Result<i64> {
 }
 
 pub fn update(conn: &Connection, project: &Project) -> Result<()> {
+    if project.date.trim().is_empty() {
+        return Err(rusqlite::Error::InvalidParameterName(
+            "A project needs a date.".into()
+        ));
+    }
     if let Some(new_parent) = project.parent_id {
         if would_create_cycle(conn, project.id, new_parent)? {
             return Err(rusqlite::Error::InvalidParameterName(
@@ -88,8 +100,8 @@ pub fn update(conn: &Connection, project: &Project) -> Result<()> {
     }
     let tx = conn.unchecked_transaction()?;
     tx.execute(
-        "UPDATE projects SET title=?1, description=?2, parent_id=?3, is_closed=?4, start_date=?5, end_date=?6 WHERE id=?7",
-        params![project.title, project.description, project.parent_id, project.is_closed, project.start_date, project.end_date, project.id],
+        "UPDATE projects SET title=?1, description=?2, parent_id=?3, is_closed=?4, date=?5, start_date=?6, end_date=?7 WHERE id=?8",
+        params![project.title, project.description, project.parent_id, project.is_closed, project.date, project.start_date, project.end_date, project.id],
     )?;
     // is_template is intentionally not updatable — it is fixed at creation/clone time.
     for (table, ids) in CAT_TABLES.iter().zip(project_cat_ids(project)) {
@@ -131,6 +143,8 @@ pub fn delete(conn: &Connection, id: i64) -> Result<()> {
 /// templates.
 ///
 /// Dates are re-anchored to today:
+/// - project dates shift as a group: the root's date lands on today and every
+///   sub-project keeps its distance to it;
 /// - every project start date becomes today; its end date is shifted by the
 ///   same amount so the planned duration is preserved;
 /// - log due dates shift as a group: the earliest due date in the whole tree
@@ -159,8 +173,16 @@ pub fn clone_tree_at(conn: &Connection, src_id: i64, new_title: &str, today: Nai
     }
     let log_shift_days = min_due.map(|d| (today - d).num_days()).unwrap_or(0);
 
+    // Project date shift: the root's date → today.
+    let root_date: String = conn.query_row(
+        "SELECT date FROM projects WHERE id = ?1", params![src_id], |r| r.get(0)
+    )?;
+    let date_shift_days = NaiveDate::parse_from_str(&root_date, "%Y-%m-%d")
+        .map(|d| (today - d).num_days())
+        .unwrap_or(0);
+
     let tx = conn.unchecked_transaction()?;
-    let new_id = clone_node(&tx, src_id, None, Some(new_title), today, log_shift_days)?;
+    let new_id = clone_node(&tx, src_id, None, Some(new_title), today, log_shift_days, date_shift_days)?;
     tx.commit()?;
     Ok(new_id)
 }
@@ -186,13 +208,19 @@ fn shift_date(date: &str, days: i64) -> String {
     }
 }
 
-fn clone_node(conn: &Connection, src_id: i64, new_parent: Option<i64>, title_override: Option<&str>, today: NaiveDate, log_shift_days: i64) -> Result<i64> {
-    let (title, description, is_closed, start_date, end_date): (String, Option<String>, bool, Option<String>, Option<String>) = conn.query_row(
-        "SELECT title, description, is_closed, start_date, end_date FROM projects WHERE id = ?1",
+fn clone_node(conn: &Connection, src_id: i64, new_parent: Option<i64>, title_override: Option<&str>, today: NaiveDate, log_shift_days: i64, date_shift_days: i64) -> Result<i64> {
+    let (title, description, is_closed, date, start_date, end_date): (String, Option<String>, bool, String, Option<String>, Option<String>) = conn.query_row(
+        "SELECT title, description, is_closed, date, start_date, end_date FROM projects WHERE id = ?1",
         params![src_id],
-        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?)),
     )?;
     let title = title_override.map(str::to_string).unwrap_or(title);
+
+    // An unparseable date can't be shifted: the copy lands on today.
+    let new_date = match NaiveDate::parse_from_str(&date, "%Y-%m-%d") {
+        Ok(d) => (d + Duration::days(date_shift_days)).to_string(),
+        Err(_) => today.to_string(),
+    };
 
     // Project start → today; end keeps its distance from start (falls back to
     // the global log shift when there is no start to measure from).
@@ -205,8 +233,8 @@ fn clone_node(conn: &Connection, src_id: i64, new_parent: Option<i64>, title_ove
     let new_end = end_date.as_deref().map(|e| shift_date(e, project_shift_days));
 
     conn.execute(
-        "INSERT INTO projects (title, description, parent_id, is_closed, is_template, start_date, end_date) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6)",
-        params![title, description, new_parent, is_closed, new_start, new_end],
+        "INSERT INTO projects (title, description, parent_id, is_closed, is_template, date, start_date, end_date) VALUES (?1, ?2, ?3, ?4, 0, ?5, ?6, ?7)",
+        params![title, description, new_parent, is_closed, new_date, new_start, new_end],
     )?;
     let new_id = conn.last_insert_rowid();
 
@@ -245,7 +273,7 @@ fn clone_node(conn: &Connection, src_id: i64, new_parent: Option<i64>, title_ove
         ids?
     };
     for cid in child_ids {
-        clone_node(conn, cid, Some(new_id), None, today, log_shift_days)?;
+        clone_node(conn, cid, Some(new_id), None, today, log_shift_days, date_shift_days)?;
     }
 
     Ok(new_id)

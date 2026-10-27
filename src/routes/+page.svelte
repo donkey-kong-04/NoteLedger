@@ -2,8 +2,9 @@
   import { onMount, onDestroy, tick } from 'svelte';
   import { goto } from '$app/navigation';
   import LogEditor from '$lib/components/LogEditor.svelte';
-  import { settings, picklists, logs, loadAll, liveProjects, pendingProjectFocus, moveLogDueDate, moveLogsDueDates } from '$lib/store';
+  import { settings, picklists, logs, loadAll, liveProjects, pendingProjectFocus, moveProjectDate, moveProjectsDates, moveLogDueDate } from '$lib/store';
   import type { Log, Project, PicklistValue } from '$lib/types';
+  import { compareLogs, deadlineLevel } from '$lib/types';
   import { computeVisibility, displayedProjectIds } from '$lib/filters';
   import { densityStyle } from '$lib/density';
   import { dateKey, parseDateKey, isWeekend, addDays, mondayOf, sameWeekdayInWeekOf, addWeeks, monthWeeks, shownWeeks, groupByDate, monthIndexOf, monthIndexOfKey, fromMonthIndex } from '$lib/calendar';
@@ -18,32 +19,52 @@
   $: cat3Vals = $picklists.filter(v => v.picklist_type === 'category_3').sort(byLabel);
   $: cat4Vals = $picklists.filter(v => v.picklist_type === 'category_4').sort(byLabel);
 
-  // ── Logs ──────────────────────────────────────────────────────────────────
-  // No filters on this page: every open log with a deadline, placed on its
-  // due date — except in closed projects (hidden like in the unfiltered
-  // Project view) and templates.
+  // ── Projects ──────────────────────────────────────────────────────────────
+  // No filters on this page: every open project, placed on its date — except
+  // closed projects (or under a closed ancestor — hidden like in the
+  // unfiltered Project view) and templates. Each project's card lists its own
+  // open logs, whatever their due date (sub-projects have their own card).
   $: shownProjectIds = displayedProjectIds($liveProjects, computeVisibility($liveProjects, $logs, null, false, true));
-  $: calendarLogs = $logs
-    .filter(l => !l.is_closed && l.due_date && shownProjectIds.has(Number(l.project_id)))
-    .sort((a, b) => a.title.localeCompare(b.title));
+  $: calendarProjects = $liveProjects.filter(p => p.date && shownProjectIds.has(p.id));
+  $: openLogsByProject = openLogsOf($logs);
 
-  // Each day's logs grouped by project — sorted A-Z by project path, titles
-  // A-Z within a project — so a project shows once with its logs below it.
-  type ProjectGroup = { projectId: number; path: string; logs: Log[] };
-  $: groupsByDate = new Map(
-    [...groupByDate(calendarLogs, l => l.due_date ?? '')]
-      .map(([key, dayLogs]) => [key, groupByProject(dayLogs, $liveProjects)])
+  // Each day's project cards, sorted A-Z by project path.
+  type ProjectCard = { project: Project; path: string; logs: Log[] };
+  $: cardsByDate = new Map(
+    [...groupByDate(calendarProjects, p => p.date)]
+      .map(([key, dayProjects]) => [key, projectCards(dayProjects, $liveProjects, openLogsByProject)] as const)
   );
 
-  function groupByProject(dayLogs: Log[], allProjects: Project[]): ProjectGroup[] {
-    const groups = new Map<number, ProjectGroup>();
-    for (const log of dayLogs) {
+  // Open logs per project id: by due date (no date last), titles A-Z on ties.
+  function openLogsOf(allLogs: Log[]): Map<number, Log[]> {
+    const byProject = new Map<number, Log[]>();
+    const open = allLogs
+      .filter(l => !l.is_closed)
+      .sort((a, b) => a.title.localeCompare(b.title))
+      .sort(compareLogs);
+    for (const log of open) {
       const id = Number(log.project_id);
-      let group = groups.get(id);
-      if (!group) groups.set(id, group = { projectId: id, path: projectPath(id, allProjects), logs: [] });
-      group.logs.push(log);
+      const list = byProject.get(id);
+      if (list) list.push(log);
+      else byProject.set(id, [log]);
     }
-    return [...groups.values()].sort((a, b) => a.path.localeCompare(b.path));
+    return byProject;
+  }
+
+  function projectCards(dayProjects: Project[], allProjects: Project[], logsByProject: Map<number, Log[]>): ProjectCard[] {
+    return dayProjects
+      .map(p => ({ project: p, path: projectPath(p.id, allProjects), logs: logsByProject.get(p.id) ?? [] }))
+      .sort((a, b) => a.path.localeCompare(b.path));
+  }
+
+  // Log titles are colored by due date, like the Project view's deadline
+  // pills: red = this week or earlier, yellow = next week, green = later.
+  function dueClass(log: Log): string {
+    return log.due_date ? `due-${deadlineLevel(log.due_date)}` : 'due-none';
+  }
+
+  function logTooltip(log: Log): string {
+    return `${log.title}\n${log.due_date ? `Due ${fmtDay(log.due_date)}` : 'No due date'} · click to edit · right-click to move the log by weeks`;
   }
 
   // "Parent › Child" — takes the store snapshot so callers re-render on updates.
@@ -60,8 +81,8 @@
 
   // ── Weekends ──────────────────────────────────────────────────────────────
   // "Show weekends" is off by default and remembered per machine. Weekends
-  // are only hidden while no displayed log falls on one: a log on a Saturday
-  // or Sunday (often a wrong date) must never be out of sight.
+  // are only hidden while no displayed project falls on one: a project on a
+  // Saturday or Sunday (often a wrong date) must never be out of sight.
   const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   const WEEKENDS_PREF_KEY = 'noteledger.calendar.showWeekends';
 
@@ -75,28 +96,27 @@
   let showWeekendsPref = readWeekendsPref();
   $: saveWeekendsPref(showWeekendsPref);
 
-  $: hasWeekendLogs = calendarLogs.some(l => isWeekend(parseDateKey(l.due_date ?? '')));
-  $: showWeekends = showWeekendsPref || hasWeekendLogs;
+  $: hasWeekendProjects = calendarProjects.some(p => isWeekend(parseDateKey(p.date)));
+  $: showWeekends = showWeekendsPref || hasWeekendProjects;
   $: cols = showWeekends ? 7 : 5;
 
   // ── Months shown ──────────────────────────────────────────────────────────
   // All months are stacked in one scrolling list, from the current week to
-  // next month (or the latest open deadline, if later). The past only shows
-  // where open logs are: empty past weeks — even of the current month — and
+  // next month (or the latest project date, if later). The past only shows
+  // where projects are: empty past weeks — even of the current month — and
   // empty past months are hidden.
   const now = new Date();
   const todayKey = dateKey(now);
   // The current week (Monday–Sunday) is highlighted across the grid.
   const weekStartKey = dateKey(mondayOf(now));
   const weekEndKey = dateKey(addDays(mondayOf(now), 6));
-  const weekFridayKey = dateKey(addDays(mondayOf(now), 4));
   const currentIndex = monthIndexOf(now);
 
-  $: openDueKeys = new Set(calendarLogs.map(l => l.due_date ?? ''));
-  $: dueIndexes = [...openDueKeys].map(monthIndexOfKey).filter(Number.isFinite);
+  $: datedKeys = new Set(calendarProjects.map(p => p.date));
+  $: datedIndexes = [...datedKeys].map(monthIndexOfKey).filter(Number.isFinite);
   // The current week may start in the previous month.
-  $: firstIndex = Math.min(monthIndexOf(mondayOf(now)), ...dueIndexes);
-  $: lastIndex = Math.max(currentIndex + 1, ...dueIndexes);
+  $: firstIndex = Math.min(monthIndexOf(mondayOf(now)), ...datedIndexes);
+  $: lastIndex = Math.max(currentIndex + 1, ...datedIndexes);
 
   $: months = Array.from({ length: lastIndex - firstIndex + 1 }, (_, i) => {
     const index = firstIndex + i;
@@ -106,7 +126,7 @@
       label: new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
       // Visible columns only; with weekends hidden, a week whose only days in
       // this month fall on the weekend has nothing to show and is dropped.
-      weeks: shownWeeks(monthWeeks(year, month), month, weekStartKey, openDueKeys)
+      weeks: shownWeeks(monthWeeks(year, month), month, weekStartKey, datedKeys)
         .map(w => w.slice(0, cols))
         .filter(w => w.some(d => d.getMonth() === month)),
     };
@@ -115,8 +135,8 @@
   let mainEl: HTMLElement;
   let weekdayEl: HTMLElement;
 
-  // Weeks/months appearing or disappearing above the viewport (logs moved,
-  // added or deleted) would shift what's on screen: keep the first visible
+  // Weeks/months appearing or disappearing above the viewport (projects
+  // moved, added or closed) would shift what's on screen: keep the first visible
   // day where it was. Not before the initial scroll, which sets the position.
   let initialScrollDone = false;
   $: layoutKey = months.map(m => `${m.index}:${m.weeks.map(w => dateKey(w[0])).join('|')}`).join(',');
@@ -170,36 +190,36 @@
     initialScrollDone = true;
   });
 
-  // ── Drag & drop (moves a log's due date) ──────────────────────────────────
+  // ── Drag & drop (moves a project's date) ──────────────────────────────────
   // Pointer events rather than HTML5 drag & drop, which the Tauri webview can
-  // swallow (Windows). A press only becomes a drag past a few pixels, so a
-  // plain click still opens the editor. Weekdays are the drop targets —
-  // weekends (styled as read-only) and other months' blank cells are not.
-  // Dragging near the top/bottom edge scrolls, to reach other months.
+  // swallow (Windows). A press anywhere on a project card (but its + button)
+  // only becomes a drag past a few pixels, so a plain click still opens the
+  // log editor or the Project view. Weekdays are the drop targets — weekends
+  // (styled as read-only) and other months' blank cells are not. Dragging
+  // near the top/bottom edge scrolls, to reach other months.
   const DRAG_START_PX = 5;
   const EDGE_PX = 56;
 
   type Drag = {
-    log: Log;
+    project: Project;
     startX: number; startY: number;
     x: number; y: number;
     offsetX: number; offsetY: number; width: number;
     active: boolean; cancelled: boolean;
   };
   let drag: Drag | null = null;
-  $: draggingId = drag?.active && !drag.cancelled ? drag.log.id : null;
+  $: draggingId = drag?.active && !drag.cancelled ? drag.project.id : null;
   let dropKey: string | null = null;
   let suppressClick = false;
   let scrollRaf = 0;
 
-  function onChipPointerDown(e: PointerEvent, log: Log) {
+  function onCardPointerDown(e: PointerEvent, project: Project) {
     if (e.button !== 0) return;
-    // Pressed on a log row: the ghost takes the card's width, held where grabbed.
-    const row = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const card = ((e.currentTarget as HTMLElement).closest('.log-chip') as HTMLElement).getBoundingClientRect();
+    // The ghost takes the card's width, held where grabbed.
+    const card = (e.currentTarget as HTMLElement).getBoundingClientRect();
     drag = {
-      log, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
-      offsetX: e.clientX - card.left, offsetY: e.clientY - row.top, width: card.width,
+      project, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY,
+      offsetX: e.clientX - card.left, offsetY: e.clientY - card.top, width: card.width,
       active: false, cancelled: false,
     };
   }
@@ -246,21 +266,21 @@
 
   function onPointerUp() {
     if (!drag) return;
-    const { log, active, cancelled } = drag;
+    const { project, active, cancelled } = drag;
     const target = dropKey;
     endDrag();
-    if (!active) return; // a plain click: the chip's click handler opens the editor
-    // The click that follows this pointerup must not open the editor.
+    if (!active) return; // a plain click: the card's buttons handle it
+    // The click that follows this pointerup must not open anything.
     suppressClick = true;
     setTimeout(() => { suppressClick = false; });
-    if (!cancelled && target && target !== log.due_date) {
-      moveLogDueDate(log, target).catch(err => console.error('moveLogDueDate failed:', err));
+    if (!cancelled && target && target !== project.date) {
+      moveProjectDate(project, target).catch(err => console.error('moveProjectDate failed:', err));
     }
   }
 
   function onWindowKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && chipMenu) {
-      chipMenu = null;
+    if (e.key === 'Escape' && cardMenu) {
+      cardMenu = null;
       return;
     }
     if (e.key === 'Escape' && moveSource) {
@@ -274,41 +294,58 @@
     }
   }
 
-  function onChipClick(log: Log) {
+  function onLogClick(log: Log) {
     if (!suppressClick) openEdit(log);
   }
 
-  // ── Log right-click menu ──────────────────────────────────────────────────
-  // Moves a log 1 or 2 weeks after its due date (same weekday). A transparent
-  // layer under the menu catches the dismissing click, so it doesn't also
-  // open the editor or create a log.
+  // ── Right-click menu ──────────────────────────────────────────────────────
+  // Moves what was right-clicked 1 or 2 weeks later (same weekday): a log row
+  // → that log's due date (from today when it has none); the rest of a card
+  // → the project's date. A transparent layer under the menu catches the
+  // dismissing click, so it doesn't also open the editor or the Project view.
   const WEEK_MOVES = [
     { weeks: 1, label: 'Move to next week' },
     { weeks: 2, label: 'Move in 2 weeks' },
   ];
-  let chipMenu: { log: Log; x: number; y: number } | null = null;
-  let chipMenuEl: HTMLDivElement;
+  type MenuTarget = { kind: 'project'; project: Project } | { kind: 'log'; log: Log };
+  let cardMenu: { target: MenuTarget; x: number; y: number } | null = null;
+  let cardMenuEl: HTMLDivElement;
 
-  async function openChipMenu(e: MouseEvent, log: Log) {
+  function menuBaseDate(target: MenuTarget): string {
+    return target.kind === 'project' ? target.project.date : (target.log.due_date || todayKey);
+  }
+
+  function menuTitle(target: MenuTarget): string {
+    return target.kind === 'project'
+      ? `Project: ${projectPath(target.project.id, $liveProjects)}`
+      : `Log: ${target.log.title}`;
+  }
+
+  async function openCardMenu(e: MouseEvent, target: MenuTarget) {
     if (drag?.active) return;
-    chipMenu = { log, x: e.clientX, y: e.clientY };
+    cardMenu = { target, x: e.clientX, y: e.clientY };
     await tick();
-    if (!chipMenu || !chipMenuEl) return;
+    if (!cardMenu || !cardMenuEl) return;
     // Near the window's right/bottom edge, shift it back inside.
-    const r = chipMenuEl.getBoundingClientRect();
-    chipMenu = {
-      ...chipMenu,
-      x: Math.max(4, Math.min(chipMenu.x, window.innerWidth - r.width - 4)),
-      y: Math.max(4, Math.min(chipMenu.y, window.innerHeight - r.height - 4)),
+    const r = cardMenuEl.getBoundingClientRect();
+    cardMenu = {
+      ...cardMenu,
+      x: Math.max(4, Math.min(cardMenu.x, window.innerWidth - r.width - 4)),
+      y: Math.max(4, Math.min(cardMenu.y, window.innerHeight - r.height - 4)),
     };
-    chipMenuEl.querySelector('button')?.focus();
+    cardMenuEl.querySelector('button')?.focus();
   }
 
   function moveByWeeks(weeks: number) {
-    if (!chipMenu) return;
-    const { log } = chipMenu;
-    chipMenu = null;
-    moveLogDueDate(log, addWeeks(log.due_date ?? '', weeks)).catch(err => console.error('moveLogDueDate failed:', err));
+    if (!cardMenu) return;
+    const { target } = cardMenu;
+    cardMenu = null;
+    const to = addWeeks(menuBaseDate(target), weeks);
+    if (target.kind === 'project') {
+      moveProjectDate(target.project, to).catch(err => console.error('moveProjectDate failed:', err));
+    } else {
+      moveLogDueDate(target.log, to).catch(err => console.error('moveLogDueDate failed:', err));
+    }
   }
 
   onDestroy(() => {
@@ -316,37 +353,30 @@
     clearTimeout(flashTimer);
   });
 
-  // ── Move old logs ─────────────────────────────────────────────────────────
-  // "Old" = the open logs the calendar shows that are due before the current
-  // week (any past week). Each moves to the same weekday this week (a Tuesday
-  // stays a Tuesday), after a confirmation dialog listing every move. Open
-  // logs without a due date (same projects, so never on the grid) come along
-  // too and land on Friday this week, listed after the dated ones.
-  $: undatedLogs = $logs
-    .filter(l => !l.is_closed && !l.due_date && shownProjectIds.has(Number(l.project_id)))
-    .sort((a, b) => a.title.localeCompare(b.title));
-  $: oldLogs = [
-    ...calendarLogs
-      .filter(l => (l.due_date ?? '') < weekStartKey)
-      .sort((a, b) => (a.due_date ?? '').localeCompare(b.due_date ?? '') || a.title.localeCompare(b.title)),
-    ...undatedLogs,
-  ];
+  // ── Move old projects ─────────────────────────────────────────────────────
+  // "Old" = the projects the calendar shows dated before the current week
+  // (any past week). Each moves to the same weekday this week (a Tuesday
+  // stays a Tuesday), after a confirmation dialog listing every move. Their
+  // logs keep their due dates.
+  type OldProject = { project: Project; path: string };
+  $: oldProjects = calendarProjects
+    .filter(p => p.date < weekStartKey)
+    .map(p => ({ project: p, path: projectPath(p.id, $liveProjects) }))
+    .sort((a, b) => a.project.date.localeCompare(b.project.date) || a.path.localeCompare(b.path));
 
-  let moveSource: Log[] | null = null; // the confirmation is open while set
+  let moveSource: OldProject[] | null = null; // the confirmation is open while set
   let moving = false;
   let moveError = '';
   let moveConfirmBtn: HTMLButtonElement;
 
-  $: moves = (moveSource ?? []).map(log => {
-    const from = log.due_date ?? '';
-    return { log, from, to: from ? sameWeekdayInWeekOf(from, now) : weekFridayKey };
-  });
-  // Moved to a weekday this week that has already passed: still overdue.
+  $: moves = (moveSource ?? []).map(({ project, path }) =>
+    ({ project, path, from: project.date, to: sameWeekdayInWeekOf(project.date, now) }));
+  // Moved to a weekday this week that has already passed: still in the past.
   $: stillOverdue = moves.filter(m => m.to < todayKey).length;
 
   async function openMoveDialog() {
     // Snapshot, so the list can't change under the confirmation.
-    moveSource = oldLogs;
+    moveSource = oldProjects;
     moveError = '';
     await tick();
     moveConfirmBtn?.focus();
@@ -361,11 +391,11 @@
     moving = true;
     moveError = '';
     try {
-      await moveLogsDueDates(moves.map(m => ({ log: m.log, dueDate: m.to })));
+      await moveProjectsDates(moves.map(m => ({ project: m.project, date: m.to })));
       moving = false;
       moveSource = null;
     } catch (e) {
-      moveError = `Some logs could not be moved: ${e}`;
+      moveError = `Some projects could not be moved: ${e}`;
       moving = false;
     }
   }
@@ -380,17 +410,11 @@
   function openEdit(log: Log) { editorLog = log; showEditor = true; }
   function closeEditor() { showEditor = false; editorLog = null; }
 
-  // Clicking a weekday (outside its logs) creates a log due that day. No
-  // project is preselected (0): the editor asks for one before Create.
-  // Weekends are read-only: no creation there.
-  function openNewLog(key: string) {
-    editorLog = { due_date: key, type_id: logTypes[0]?.id ?? 0, project_id: 0 } as Log;
+  // The + next to a project's name creates a log in that project. No due date
+  // is preset: the editor asks for one before Create.
+  function openNewLog(projectId: number) {
+    editorLog = { due_date: null, type_id: logTypes[0]?.id ?? 0, project_id: projectId } as Log;
     showEditor = true;
-  }
-
-  function onDayClick(e: MouseEvent, key: string) {
-    if (suppressClick || (e.target as HTMLElement).closest('.log-chip')) return;
-    openNewLog(key);
   }
 
   // Clicking a project name: the Project view, filtered on that project.
@@ -412,16 +436,23 @@
 <div class="page" class:dark={isDark} class:dragging={drag?.active && !drag.cancelled} style={pageDensityStyle}>
   <header class="page-header">
     <div class="header-left">
-      <!-- Only offered while past weeks still hold open logs, or open logs have no due date. -->
-      {#if oldLogs.length > 0}
+      <!-- Only offered while past weeks still hold projects. -->
+      {#if oldProjects.length > 0}
         <button
           class="btn-secondary-sm move-old-btn" on:click={openMoveDialog}
-          title="Move the open logs due before this week (before {fmtDay(weekStartKey)}) to the same weekday this week, and the open logs without a due date to Friday this week"
+          title="Move the projects dated before this week (before {fmtDay(weekStartKey)}) to the same weekday this week"
         >
-          Move old logs
-          <span class="count-pill">{oldLogs.length}</span>
+          Move old projects
+          <span class="count-pill">{oldProjects.length}</span>
         </button>
       {/if}
+      <span class="legend" title="Log titles are colored by their due date">
+        <span class="legend-label">Logs due:</span>
+        <span class="due-red">this week</span>
+        <span class="due-yellow">next week</span>
+        <span class="due-green">later</span>
+        <span class="due-none">no date</span>
+      </span>
     </div>
     <div class="header-right">
       <label class="weekend-toggle" title="Saturdays and Sundays are always shown while a log falls on one, so nothing on a wrong date is missed">
@@ -450,44 +481,46 @@
                 {@const key = dateKey(day)}
                 {@const weekend = isWeekend(day)}
                 {@const currentWeek = key >= weekStartKey && key <= weekEndKey}
-                <!-- Mouse: click anywhere outside a log to create one; keyboard: the + button. -->
-                <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
                 <div
                   class="day" class:weekend class:current-week={currentWeek} class:today={key === todayKey}
                   class:flash={flashWeek && currentWeek}
                   class:drop-target={dropKey === key}
                   data-date={key}
                   data-drop={weekend ? null : key}
-                  on:click={e => { if (!weekend) onDayClick(e, key); }}
                 >
                   <span class="day-num">{day.getDate()}</span>
-                  {#if !weekend}
-                    <button
-                      class="add-btn" title="New log due {fmtDay(key)}" aria-label="New log due {fmtDay(key)}"
-                      on:click|stopPropagation={() => openNewLog(key)}
-                    >+</button>
-                  {/if}
-                  {#each groupsByDate.get(key) ?? [] as group (group.projectId)}
-                    <!-- One card per project and day: the project on top, then each log
-                         as its own row (click to edit, drag to reschedule). The buttons
-                         fill the card, so a click never falls through to the day. -->
+                  {#each cardsByDate.get(key) ?? [] as card (card.project.id)}
+                    <!-- One card per project: its path on top (click: Project view; +: new
+                         log in it), then its open logs, whatever their due date (click to
+                         edit; titles colored by due date). Drag the card to move the
+                         project. Right-click moves by weeks: a log row → that log, the
+                         rest of the card → the project. -->
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div
-                      class="log-chip"
+                      class="project-card"
                       class:overdue={key < todayKey}
-                      class:dragging={group.logs.length === 1 && group.logs[0].id === draggingId}
+                      class:dragging={card.project.id === draggingId}
+                      on:pointerdown={e => onCardPointerDown(e, card.project)}
+                      on:contextmenu|preventDefault|stopPropagation={e => openCardMenu(e, { kind: 'project', project: card.project })}
                     >
-                      <button
-                        class="chip-project" title="Open {group.path} in the Project view"
-                        on:click|stopPropagation={() => openProjectView(group.projectId)}
-                      >{group.path}</button>
-                      {#each group.logs as log (log.id)}
+                      <div class="card-head">
                         <button
-                          class="chip-title"
-                          class:dragging={group.logs.length > 1 && log.id === draggingId}
-                          title="{log.title}&#10;Click to edit · drag to reschedule · right-click to move by weeks"
-                          on:pointerdown={e => onChipPointerDown(e, log)}
-                          on:contextmenu|preventDefault|stopPropagation={e => openChipMenu(e, log)}
-                          on:click|stopPropagation={() => onChipClick(log)}
+                          class="card-project"
+                          title="Open {card.path} in the Project view&#10;Drag to move the project · right-click to move it by weeks"
+                          on:click={() => openProjectView(card.project.id)}
+                        >{card.path}</button>
+                        <button
+                          class="card-add" title="New log in {card.path}" aria-label="New log in {card.path}"
+                          on:pointerdown={e => e.stopPropagation()}
+                          on:click={() => openNewLog(card.project.id)}
+                        >+</button>
+                      </div>
+                      {#each card.logs as log (log.id)}
+                        <button
+                          class="card-log {dueClass(log)}"
+                          title={logTooltip(log)}
+                          on:contextmenu|preventDefault|stopPropagation={e => openCardMenu(e, { kind: 'log', log })}
+                          on:click={() => onLogClick(log)}
                         >{log.title}</button>
                       {/each}
                     </div>
@@ -504,27 +537,29 @@
   </main>
 
   {#if drag?.active && !drag.cancelled}
+    {@const logCount = openLogsByProject.get(drag.project.id)?.length ?? 0}
     <div
-      class="log-chip drag-ghost" class:overdue={(drag.log.due_date ?? '') < todayKey}
+      class="project-card drag-ghost" class:overdue={drag.project.date < todayKey}
       style="left: {drag.x - drag.offsetX}px; top: {drag.y - drag.offsetY}px; width: {drag.width}px;"
     >
-      <span class="ghost-project">{projectPath(Number(drag.log.project_id), $liveProjects)}</span>
-      <span class="ghost-title">{drag.log.title}</span>
+      <span class="ghost-project">{projectPath(drag.project.id, $liveProjects)}</span>
+      <span class="ghost-count">{logCount} open log{logCount !== 1 ? 's' : ''}</span>
     </div>
   {/if}
 
-  {#if chipMenu}
+  {#if cardMenu}
     <div
       class="menu-layer" role="presentation"
-      on:pointerdown={() => chipMenu = null}
-      on:contextmenu|preventDefault={() => chipMenu = null}
-      on:wheel={() => chipMenu = null}
+      on:pointerdown={() => cardMenu = null}
+      on:contextmenu|preventDefault={() => cardMenu = null}
+      on:wheel={() => cardMenu = null}
     ></div>
-    <div class="chip-menu" role="menu" bind:this={chipMenuEl} style="left: {chipMenu.x}px; top: {chipMenu.y}px;">
+    <div class="card-menu" role="menu" bind:this={cardMenuEl} style="left: {cardMenu.x}px; top: {cardMenu.y}px;">
+      <div class="menu-title">{menuTitle(cardMenu.target)}</div>
       {#each WEEK_MOVES as mv}
         <button role="menuitem" on:click={() => moveByWeeks(mv.weeks)}>
           {mv.label}
-          <span class="menu-date">{fmtDay(addWeeks(chipMenu.log.due_date ?? '', mv.weeks))}</span>
+          <span class="menu-date">{fmtDay(addWeeks(menuBaseDate(cardMenu.target), mv.weeks))}</span>
         </button>
       {/each}
     </div>
@@ -533,23 +568,23 @@
   {#if moveSource}
     <div class="backdrop" on:click={closeMoveDialog} role="presentation"></div>
     <div class="move-dialog" role="dialog" aria-modal="true" aria-labelledby="move-dialog-title">
-      <h2 id="move-dialog-title">Move old logs to this week?</h2>
+      <h2 id="move-dialog-title">Move old projects to this week?</h2>
       <p class="dialog-hint">
-        Are you sure? Open logs due before this week (before {fmtDay(weekStartKey)}) will move to the same
-        weekday this week; open logs without a due date will move to Friday this week ({fmtDay(weekFridayKey)}).
+        Are you sure? Projects dated before this week (before {fmtDay(weekStartKey)}) will move to the same
+        weekday this week. Their logs keep their due dates.
       </p>
       <ul class="move-list">
-        {#each moves as mv (mv.log.id)}
+        {#each moves as mv (mv.project.id)}
           <li>
-            <span class="move-title">{mv.log.title}</span>
-            <span class="move-dates" class:overdue={mv.to < todayKey}>{mv.from ? fmtDay(mv.from) : 'No date'} → {fmtDay(mv.to)}</span>
+            <span class="move-title">{mv.path}</span>
+            <span class="move-dates" class:overdue={mv.to < todayKey}>{fmtDay(mv.from)} → {fmtDay(mv.to)}</span>
           </li>
         {/each}
       </ul>
       {#if stillOverdue > 0}
         <p class="dialog-note">
-          {stillOverdue} log{stillOverdue !== 1 ? 's' : ''} (in red) will land on a day of this week that has already
-          passed, so {stillOverdue !== 1 ? 'they stay' : 'it stays'} overdue.
+          {stillOverdue} project{stillOverdue !== 1 ? 's' : ''} (in red) will land on a day of this week that has already
+          passed, so {stillOverdue !== 1 ? 'they stay' : 'it stays'} in the past.
         </p>
       {/if}
       {#if moveError}
@@ -558,7 +593,7 @@
       <div class="dialog-actions">
         <button class="btn-secondary-sm" on:click={closeMoveDialog} disabled={moving}>Cancel</button>
         <button class="btn-primary" bind:this={moveConfirmBtn} on:click={confirmMove} disabled={moving}>
-          {moving ? 'Moving…' : `Move ${moves.length} log${moves.length !== 1 ? 's' : ''}`}
+          {moving ? 'Moving…' : `Move ${moves.length} project${moves.length !== 1 ? 's' : ''}`}
         </button>
       </div>
     </div>
@@ -582,6 +617,11 @@
     --weekend-bg:   #dde1e7;
     --weekend-text: #9ca3af;
     --current-week-bg: rgba(99,102,241,0.08);
+    /* Log due-date text colors: the Project view's deadline red/yellow/green,
+       darkened (light) or lightened (dark) so titles stay readable. */
+    --due-red:    #dc2626;
+    --due-yellow: #b45309;
+    --due-green:  #15803d;
     display: flex; flex-direction: column;
     height: 100%; overflow: hidden;
     background: var(--surface-2); color: var(--text);
@@ -591,6 +631,9 @@
     --weekend-bg:   #0e1420;
     --weekend-text: #6b7280;
     --current-week-bg: rgba(99,102,241,0.15);
+    --due-red:    #f87171;
+    --due-yellow: #fbbf24;
+    --due-green:  #4ade80;
   }
 
   .page-header {
@@ -608,6 +651,12 @@
     cursor: pointer; user-select: none;
   }
   .weekend-toggle input { accent-color: var(--accent); cursor: pointer; margin: 0; }
+
+  .legend {
+    display: inline-flex; align-items: baseline; gap: 10px;
+    font-size: 12px; font-weight: 600; white-space: nowrap;
+  }
+  .legend-label { color: var(--text-muted); font-weight: 500; }
 
 
   .btn-secondary-sm {
@@ -628,9 +677,9 @@
     font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
   }
 
-  /* Log right-click menu. */
+  /* Project right-click menu. */
   .menu-layer { position: fixed; inset: 0; z-index: 200; }
-  .chip-menu {
+  .card-menu {
     position: fixed; z-index: 201;
     min-width: 220px;
     display: flex; flex-direction: column;
@@ -640,15 +689,23 @@
     border-radius: 8px;
     box-shadow: 0 6px 18px rgba(0,0,0,0.25);
   }
-  .chip-menu button {
+  .card-menu button {
     display: flex; align-items: baseline; justify-content: space-between; gap: 16px;
     padding: 6px 10px;
     background: none; border: none; border-radius: 5px;
     font-family: inherit; font-size: 13px; color: var(--text);
     text-align: left; cursor: pointer;
   }
-  .chip-menu button:hover, .chip-menu button:focus-visible { background: var(--surface-2); outline: none; }
+  .card-menu button:hover, .card-menu button:focus-visible { background: var(--surface-2); outline: none; }
   .menu-date { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  /* Says what the moves apply to: the right-clicked log or project. */
+  .menu-title {
+    max-width: 280px;
+    padding: 5px 10px 6px; margin-bottom: 2px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px; font-weight: 600; color: var(--text-muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
 
   /* Confirmation dialog — same look as the Templates clone dialog. */
   .backdrop {
@@ -751,7 +808,6 @@
   .month-grid { grid-auto-rows: minmax(96px, auto); }
 
   .day {
-    position: relative; /* anchors the + button */
     background: var(--card-bg);
     border: 1px solid var(--border); border-radius: 6px;
     padding: 6px;
@@ -760,20 +816,6 @@
     transition: background 0.1s, border-color 0.1s;
   }
   .day.blank { background: none; border-color: transparent; }
-  .day[data-drop] { cursor: pointer; } /* weekdays: click to create a log */
-
-  .add-btn {
-    position: absolute; top: 4px; right: 4px;
-    width: 20px; height: 20px;
-    display: flex; align-items: center; justify-content: center;
-    background: var(--accent); color: #fff;
-    border: none; border-radius: 6px;
-    font-size: 15px; font-weight: 600; line-height: 1; font-family: inherit;
-    cursor: pointer;
-    opacity: 0; transition: opacity 0.15s;
-  }
-  .day:hover .add-btn, .add-btn:focus-visible { opacity: 1; }
-  .page.dragging .add-btn { display: none; }
   .day.weekend { background: var(--weekend-bg); }
   .day.weekend .day-num { color: var(--weekend-text); }
   /* The current week stands out: accent tint + border on all its days
@@ -808,10 +850,10 @@
     border-radius: 999px; padding: 1px 7px;
   }
 
-  /* One card per project and day: tinted, colored left bar; the project on
-     top, then one row per log, separated by thin lines. Titles wrap over as
-     many lines as needed (never truncated). */
-  .log-chip {
+  /* One card per project: tinted, colored left bar; the project path and its
+     + on top, then one row per open log, separated by thin lines. Titles wrap
+     over as many lines as needed (never truncated). */
+  .project-card {
     --chip-tint:  rgba(99,102,241,0.12);
     --chip-hover: rgba(99,102,241,0.14);
     --chip-line:  rgba(99,102,241,0.28);
@@ -821,44 +863,67 @@
     overflow: hidden; /* clips the row hover backgrounds */
     transition: opacity 0.15s;
   }
-  .log-chip + .log-chip { margin-top: 3px; }
-  /* All calendar logs are open, so a past deadline means overdue. */
-  .log-chip.overdue {
+  .project-card + .project-card { margin-top: 3px; }
+  /* A project dated before today: tinted red until it's moved. */
+  .project-card.overdue {
     --chip-tint:  rgba(239,68,68,0.12);
     --chip-hover: rgba(239,68,68,0.14);
     --chip-line:  rgba(239,68,68,0.28);
     border-left-color: #ef4444;
   }
+  .project-card.dragging { opacity: 0.35; }
 
-  .chip-project, .chip-title {
+  .card-head { display: flex; align-items: flex-start; }
+  .card-project, .card-log {
     display: block; width: 100%; box-sizing: border-box;
     background: none; border: none;
     text-align: left; font-family: inherit; color: inherit;
     white-space: normal; overflow-wrap: anywhere;
     cursor: pointer;
   }
-  .chip-project {
-    padding: 5px 8px 1px;
+  .card-project {
+    flex: 1; min-width: 0;
+    padding: 5px 4px 2px 8px;
     font-size: 12px; font-weight: 600; line-height: 1.3;
     color: var(--text-muted);
   }
-  .chip-project:hover { color: var(--accent); text-decoration: underline; }
-  .chip-title {
-    padding: 1px 8px 5px;
-    font-size: 14px; line-height: 1.35;
-    transition: background 0.15s, opacity 0.15s;
+  .card-head:last-child .card-project { padding-bottom: 5px; } /* no logs */
+  .card-project:hover { color: var(--accent); text-decoration: underline; }
+  .card-add {
+    flex-shrink: 0;
+    width: 20px; height: 20px; margin: 3px 3px 0 0;
+    display: flex; align-items: center; justify-content: center;
+    background: none; color: var(--text-muted);
+    border: 1px solid var(--chip-line); border-radius: 5px;
+    font-size: 14px; font-weight: 600; line-height: 1; font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
   }
-  .chip-title + .chip-title { border-top: 1px solid var(--chip-line); padding-top: 5px; }
-  .chip-title:hover { background: var(--chip-hover); }
-  .log-chip.dragging, .chip-title.dragging { opacity: 0.35; }
+  .card-add:hover, .card-add:focus-visible {
+    background: var(--accent); border-color: var(--accent); color: #fff; outline: none;
+  }
+  .page.dragging .card-add { visibility: hidden; }
+  .card-log {
+    padding: 2px 8px 5px;
+    font-size: 14px; line-height: 1.35;
+    transition: background 0.15s;
+  }
+  .card-log + .card-log { border-top: 1px solid var(--chip-line); padding-top: 5px; }
+  .card-log:hover { background: var(--chip-hover); }
 
-  /* The dragged copy keeps its project for context. */
+  /* Due-date colors (log titles and the header legend). */
+  .due-red    { color: var(--due-red); }
+  .due-yellow { color: var(--due-yellow); }
+  .due-green  { color: var(--due-green); }
+  .due-none   { color: var(--text-muted); }
+
+  /* The dragged copy shows the project and how many logs come along. */
   .ghost-project {
     display: block; margin-bottom: 1px;
     font-size: 12px; font-weight: 600; line-height: 1.3;
     color: var(--text-muted);
   }
-  .ghost-title { display: block; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+  .ghost-count { display: block; font-size: 13px; line-height: 1.35; }
 
   /* Follows the pointer while dragging; opaque so it reads over any cell. */
   .drag-ghost {

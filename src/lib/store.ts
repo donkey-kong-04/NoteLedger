@@ -198,23 +198,34 @@ export async function updateLog(log: Log) {
   logs.set(fresh);
 }
 
-// Calendar rescheduling (drag & drop, "move old logs"): changes only the due
-// dates. Optimistic, so logs land on their new day at once; the reload then
-// confirms (or puts back whatever failed to save).
-export async function moveLogsDueDates(moves: { log: Log; dueDate: string }[]) {
-  const byId = new Map(moves.map(m => [m.log.id, m.dueDate]));
-  logs.update(ls => ls.map(l => (byId.has(l.id) ? { ...l, due_date: byId.get(l.id)! } : l)));
+// Calendar rescheduling (drag & drop, right-click, "move old projects"):
+// changes only the project dates. Optimistic, so projects land on their new
+// day at once; the reload then confirms (or puts back whatever failed to save).
+export async function moveProjectsDates(moves: { project: Project; date: string }[]) {
+  const byId = new Map(moves.map(m => [m.project.id, m.date]));
+  projects.update(ps => ps.map(p => (byId.has(p.id) ? { ...p, date: byId.get(p.id)! } : p)));
   try {
-    for (const { log, dueDate } of moves) {
-      await invoke<Log>('update_log', { log: { ...log, due_date: dueDate } });
+    for (const { project, date } of moves) {
+      await invoke('update_project', { project: { ...project, date } });
     }
   } finally {
-    logs.set(await invoke<Log[]>('get_logs'));
+    projects.set(await invoke<Project[]>('get_projects'));
   }
 }
 
-export function moveLogDueDate(log: Log, dueDate: string) {
-  return moveLogsDueDates([{ log, dueDate }]);
+export function moveProjectDate(project: Project, date: string) {
+  return moveProjectsDates([{ project, date }]);
+}
+
+// Calendar right-click on a log: changes only its due date, optimistically
+// like the project moves above.
+export async function moveLogDueDate(log: Log, dueDate: string) {
+  logs.update(ls => ls.map(l => (l.id === log.id ? { ...l, due_date: dueDate } : l)));
+  try {
+    await invoke<Log>('update_log', { log: { ...log, due_date: dueDate } });
+  } finally {
+    logs.set(await invoke<Log[]>('get_logs'));
+  }
 }
 
 export async function deleteLog(id: number) {

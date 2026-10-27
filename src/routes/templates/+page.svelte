@@ -8,6 +8,7 @@
   import { settings, picklists, projects, logs, projectLinks, loadAll, cloneProject, pendingProjectFocus } from '$lib/store';
   import type { Log, Project, ProjectLink } from '$lib/types';
   import { densityStyle } from '$lib/density';
+  import { dateKey } from '$lib/calendar';
 
   onMount(() => loadAll());
 
@@ -73,7 +74,7 @@
 
   function openNewSubProject(e: CustomEvent<Project>) {
     const parent = e.detail;
-    editorProject = { id: 0, title: '', description: '', parent_id: parent.id, is_closed: false, is_template: true, start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
+    editorProject = { id: 0, title: '', description: '', parent_id: parent.id, is_closed: false, is_template: true, date: dateKey(new Date()), start_date: null, end_date: null, category1_ids: [], category2_ids: [], category3_ids: [], category4_ids: [] };
     showProjectEditor = true;
   }
 
